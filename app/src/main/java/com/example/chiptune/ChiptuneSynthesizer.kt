@@ -6,8 +6,10 @@ import android.media.AudioTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.Executors
 import kotlin.math.sin
 
 data class Note(
@@ -102,7 +104,8 @@ enum class SynthType {
     Sine,
     Square,
     Fm2op,
-    Sawtooth
+    Sawtooth,
+    Opl2
 }
 
 class ChiptuneSynthesizer {
@@ -138,7 +141,7 @@ private val leadSequence = floatArrayOf(
     NOTE_FS5, NOTE_FS5, NOTE_FS5, NOTE_FS5  // F# (Half note - 8 steps)
 )
 
-    private val leadSeq = listOf(
+    val leadSeq = listOf(
         Note(NOTE_E5, 0.5f),
         Note(NOTE_E5, 0.25f),
         Note(NOTE_G5, 0.25f),
@@ -215,82 +218,112 @@ private val leadSequence = floatArrayOf(
         Note(REST, 2f),
     )
 
-    private fun generateAudio(
-        synthType: SynthType
-    ) {
+    private fun generateAudio(synthType: SynthType) {
         synthesisJob = scope.launch {
-            val buffer = ShortArray(1024)
+            val bufferSize = AudioTrack.getMinBufferSize(
+                sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
+            )
+            val buffer = ShortArray(bufferSize)
             var sampleIndex = 0L
 
-            // 110 BPM. 4 beats per whole note. (Kept your exact baseline math)
+            // 110 BPM. 4 beats per whole note.
             val samplesPerWholeNote = (sampleRate * 60.0 / 110.0) * 4.0 / 3.0
 
             var currentNoteIndex = 0
             var noteSampleCounter = 0L
+
+            // OPL2 specific state
+            var phaseModulator = 0.0
+            var phaseCarrier = 0.0
+            var oplEnvelope = 1.0
+            val twoPi = 2.0 * Math.PI
 
             while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
                 for (i in buffer.indices) {
                     val currentNote = leadSeq[currentNoteIndex]
                     val totalNoteSamples = (samplesPerWholeNote * currentNote.len).toLong()
 
-                    val leadFreq = currentNote.freq
+                    if (noteSampleCounter >= totalNoteSamples) {
+                        noteSampleCounter = 0L
+                        currentNoteIndex = (currentNoteIndex + 1) % leadSeq.size
+                        
+                        // Reset OPL2 state for new note
+                        phaseModulator = 0.0
+                        phaseCarrier = 0.0
+                        oplEnvelope = 1.0
+                    }
+
+                    val updatedNote = leadSeq[currentNoteIndex]
+                    val leadFreq = updatedNote.freq
                     val t = sampleIndex / sampleRate.toDouble()
 
-                    // Dynamically assign gate properties based on staccato status
-                    val gateRatio = if (currentNote.stacatto) 0.5 else 0.85
+                    val mixedSignal = if (synthType == SynthType.Opl2) {
+                        if (leadFreq > 0f) {
+                            val incCarrier = twoPi * leadFreq / sampleRate
+                            val incModulator = twoPi * (leadFreq * 3.5) / sampleRate
 
-                    val gateEnvelope = if (noteSampleCounter < totalNoteSamples * gateRatio) {
-                        1.0 // Note is active
-                    } else {
-                        if (currentNote.stacatto) {
-                            0.0 // Staccato: cut off immediately
+                            val modIndex = 2.5 * oplEnvelope
+                            // OPL2 Half-sine for modulator
+                            val modOut = if (phaseModulator % (2.0 * Math.PI) < Math.PI) sin(phaseModulator) else 0.0
+                            val finalModOut = modOut * modIndex
+                            
+                            val carrierOut = sin(phaseCarrier + finalModOut) * oplEnvelope
+                            
+                            oplEnvelope *= 0.99992
+                            
+                            phaseModulator = (phaseModulator + incModulator) % twoPi
+                            phaseCarrier = (phaseCarrier + incCarrier) % twoPi
+                            
+                            carrierOut * 0.7
                         } else {
-                            // Standard note: quick linear ramp down to prevent audio pops
-                            val remainingSamples = totalNoteSamples - noteSampleCounter
-                            val gateWindow = totalNoteSamples * (1.0 - gateRatio)
-                            if (gateWindow > 0) {
-                                (remainingSamples / gateWindow).coerceIn(0.0, 1.0)
-                            } else {
-                                0.0
-                            }
-                        }
-                    }
-
-                    // Waveform Synthesis Switchboard
-                    val leadSignal = if (leadFreq > 0f) {
-                        val rawSine = sin(2 * Math.PI * leadFreq * t)
-
-                        when (synthType) {
-                            SynthType.Sine -> {
-                                rawSine
-                            }
-                            SynthType.Square -> {
-                                // High if the sine wave is positive, low if it's negative
-                                if (rawSine >= 0.0) 1.0 else -1.0
-                            }
-                            SynthType.Fm2op -> {
-                                val modulatorFreq = leadFreq * 2.0
-                                val modulationIndex = 2.2
-                                val modulator = sin(2 * Math.PI * modulatorFreq * t)
-
-                                sin(2 * Math.PI * leadFreq * t + (modulator * modulationIndex))
-                            }
-                            SynthType.Sawtooth -> {
-                                // Determine the period duration of the current frequency
-                                val period = 1.0 / leadFreq
-                                // Calculate where we are inside the current cycle (0.0 to 1.0)
-                                val progress = (t % period) / period
-                                // Scale that progress (0 to 1) into the audio range (-1.0 to 1.0)
-                                val rawSaw = 2.0 * progress - 1.0
-                                rawSaw
-                            }
+                            0.0
                         }
                     } else {
-                        0.0
-                    }
+                        // Dynamically assign gate properties based on staccato status
+                        val gateRatio = if (updatedNote.stacatto) 0.5 else 0.85
 
-                    // Apply the gate envelope to the signal
-                    val mixedSignal = leadSignal * 0.30 * gateEnvelope
+                        val gateEnvelope = if (noteSampleCounter < totalNoteSamples * gateRatio) {
+                            1.0 // Note is active
+                        } else {
+                            if (updatedNote.stacatto) {
+                                0.0 // Staccato: cut off immediately
+                            } else {
+                                // Standard note: quick linear ramp down to prevent audio pops
+                                val remainingSamples = totalNoteSamples - noteSampleCounter
+                                val gateWindow = totalNoteSamples * (1.0 - gateRatio)
+                                if (gateWindow > 0) {
+                                    (remainingSamples / gateWindow).coerceIn(0.0, 1.0)
+                                } else {
+                                    0.0
+                                }
+                            }
+                        }
+
+                        // Waveform Synthesis Switchboard
+                        val leadSignal = if (leadFreq > 0f) {
+                            val rawSine = sin(2 * Math.PI * leadFreq * t)
+
+                            when (synthType) {
+                                SynthType.Sine -> rawSine
+                                SynthType.Square -> if (rawSine >= 0.0) 1.0 else -1.0
+                                SynthType.Fm2op -> {
+                                    val modulatorFreq = leadFreq * 2.0
+                                    val modulationIndex = 2.2
+                                    val modulator = sin(2 * Math.PI * modulatorFreq * t)
+                                    sin(2 * Math.PI * leadFreq * t + (modulator * modulationIndex))
+                                }
+                                SynthType.Sawtooth -> {
+                                    val period = 1.0 / leadFreq
+                                    val progress = (t % period) / period
+                                    2.0 * progress - 1.0
+                                }
+                                else -> 0.0
+                            }
+                        } else {
+                            0.0
+                        }
+                        leadSignal * 0.30 * gateEnvelope
+                    }
 
                     // 8-bit DAC Bit-crush step for true vintage hardware grime
                     val amplitude = (mixedSignal * Short.MAX_VALUE).toInt()
@@ -301,12 +334,6 @@ private val leadSequence = floatArrayOf(
                     // Advance counters
                     sampleIndex++
                     noteSampleCounter++
-
-                    // Advance to the next note if this one is complete
-                    if (noteSampleCounter >= totalNoteSamples) {
-                        noteSampleCounter = 0L
-                        currentNoteIndex = (currentNoteIndex + 1) % leadSeq.size
-                    }
                 }
 
                 currentWaveform.tryEmit(buffer.copyOf())

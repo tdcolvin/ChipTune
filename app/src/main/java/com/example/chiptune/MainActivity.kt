@@ -54,6 +54,7 @@ fun Greeting( modifier: Modifier = Modifier) {
         Button(onClick = { synth.start(SynthType.Square) }) { Text("Start Square") }
         Button(onClick = { synth.start(SynthType.Sawtooth) }) { Text("Start Sawtooth") }
         Button(onClick = { synth.start(SynthType.Fm2op) }) { Text("Start FM") }
+        Button(onClick = { synth.start(SynthType.Opl2) }) { Text("Start OPL2") }
         Button(onClick = { synth.stop() }) { Text("Stop") }
 
         Visualiser(
