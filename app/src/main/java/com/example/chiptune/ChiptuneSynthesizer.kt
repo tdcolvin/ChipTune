@@ -236,10 +236,7 @@ private val leadSequence = floatArrayOf(
 
     private fun generateAudio(synthType: SynthType) {
         synthesisJob = scope.launch {
-            val bufferSize = AudioTrack.getMinBufferSize(
-                sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
-            )
-            val buffer = ShortArray(bufferSize)
+            val buffer = ShortArray(1024)
             var sampleIndex = 0L
 
             // 110 BPM. 4 beats per whole note.
