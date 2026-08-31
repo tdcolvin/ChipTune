@@ -6,10 +6,8 @@ import android.media.AudioTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import java.util.concurrent.Executors
 import kotlin.math.sin
 
 data class Note(
@@ -131,33 +129,137 @@ private var audioTrack: AudioTrack? = null
 private var synthesisJob: Job? = null
 private val scope = CoroutineScope(Dispatchers.Default)
 
-// Sequence translated from the spreadsheet transcription (1 step = 1 Eighth Note)
-private val leadSequence = floatArrayOf(
-    // Measure 1
-    NOTE_B4, NOTE_B4, NOTE_B4, NOTE_B4, // B (Quarter - 4 steps)
-    NOTE_B4, NOTE_B4, NOTE_B4,         // B (Dotted Eighth - 3 steps)
-    NOTE_E5,                           // E (Sixteenth - 1 step)
-    NOTE_DS5, NOTE_DS5,                 // D# (Eighth - 2 steps)
-    NOTE_B4, NOTE_B4,                   // B (Eighth - 2 steps)
-    NOTE_B4, NOTE_B4, NOTE_B4, NOTE_B4, // B (Quarter - 4 steps)
+    private val leadSeq = listOf(
+        Note(NOTE_E3, 0.5f),
+        Note(NOTE_E4, 0.5f),
+        Note(NOTE_E3, 0.5f),
+        Note(NOTE_E4, 0.5f),
+        Note(NOTE_E3, 0.5f),
+        Note(NOTE_E4, 0.5f),
+        Note(NOTE_E3, 0.5f),
+        Note(NOTE_E4, 0.5f),
 
-    // Measure 2
-    NOTE_E5, NOTE_E5, NOTE_E5, NOTE_E5, // E (Quarter - 4 steps)
-    NOTE_E5, NOTE_E5, NOTE_E5,         // E (Dotted Eighth - 3 steps)
-    NOTE_FS5,                          // F# (Sixteenth - 1 step)
-    NOTE_G5, NOTE_G5,                   // G (Eighth - 2 steps)
-    NOTE_G5, NOTE_G5,                   // G (Eighth - 2 steps)
-    NOTE_FS5, NOTE_FS5,                 // F# (Eighth - 2 steps)
-    NOTE_G5, NOTE_G5,                   // G (Eighth - 2 steps)
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
 
-    // Measure 3
-    NOTE_FS5, NOTE_FS5,                 // F# (Eighth - 2 steps)
-    NOTE_E5, NOTE_E5,                   // E (Eighth - 2 steps)
-    NOTE_FS5, NOTE_FS5, NOTE_FS5, NOTE_FS5,
-    NOTE_FS5, NOTE_FS5, NOTE_FS5, NOTE_FS5  // F# (Half note - 8 steps)
-)
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
 
-    val leadSeq = listOf(
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+
+        Note(NOTE_D3, 0.5f),
+        Note(NOTE_D4, 0.5f),
+        Note(NOTE_D3, 0.5f),
+        Note(NOTE_D4, 0.5f),
+        Note(NOTE_D3, 0.5f),
+        Note(NOTE_D4, 0.5f),
+        Note(NOTE_D3, 0.5f),
+        Note(NOTE_D4, 0.5f),
+
+        Note(NOTE_C3, 0.5f),
+        Note(NOTE_C4, 0.5f),
+        Note(NOTE_C3, 0.5f),
+        Note(NOTE_C4, 0.5f),
+        Note(NOTE_C3, 0.5f),
+        Note(NOTE_C4, 0.5f),
+        Note(NOTE_C3, 0.5f),
+        Note(NOTE_C4, 0.5f),
+
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
+        Note(NOTE_B2, 0.5f),
+        Note(NOTE_B3, 0.5f),
+
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+        Note(NOTE_A2, 0.5f),
+        Note(NOTE_A3, 0.5f),
+    )
+    private val tetris = listOf(
+        // Measure 1
+        Note(NOTE_E5, 1.0f),
+        Note(NOTE_B4, 0.5f),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_D5, 1.0f),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_B4, 0.5f),
+
+        // Measure 2
+        Note(NOTE_A4, 1.0f),
+        Note(NOTE_A4, 0.5f),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_E5, 1.0f),
+        Note(NOTE_D5, 0.5f),
+        Note(NOTE_C5, 0.5f),
+
+        // Measure 3
+        Note(NOTE_B4, 1.5f),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_D5, 1.0f),
+        Note(NOTE_E5, 1.0f),
+
+        // Measure 4
+        Note(NOTE_C5, 1.0f),
+        Note(NOTE_A4, 1.0f),
+        Note(NOTE_A4, 1.0f),
+        Note(REST, 1.0f),
+
+        // Measure 5
+        Note(REST, 0.5f),
+        Note(NOTE_D5, 1.0f),
+        Note(NOTE_F5, 0.5f),
+        Note(NOTE_A5, 1.0f),
+        Note(NOTE_G5, 0.5f),
+        Note(NOTE_F5, 0.5f),
+
+        // Measure 6
+        Note(NOTE_E5, 1.5f),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_E5, 1.0f),
+        Note(NOTE_D5, 0.5f),
+        Note(NOTE_C5, 0.5f),
+
+        // Measure 7
+        Note(NOTE_B4, 1.5f),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_D5, 1.0f),
+        Note(NOTE_E5, 1.0f),
+
+        // Measure 8
+        Note(NOTE_C5, 1.0f),
+        Note(NOTE_A4, 1.0f),
+        Note(NOTE_A4, 1.0f),
+        Note(REST, 1.0f),
+    )
+
+    private val leadSeq2 = listOf(
         Note(NOTE_E5, 0.5f),
         Note(NOTE_E5, 0.25f),
         Note(NOTE_G5, 0.25f),
