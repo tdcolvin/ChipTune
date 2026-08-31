@@ -17,6 +17,22 @@ data class Note(
     val len: Float,
     val stacatto: Boolean = false
 )
+private const val NOTE_A1 = 55.00f
+private const val NOTE_AS1 = 58.27f
+private const val NOTE_B1 = 61.74f
+
+private const val NOTE_C2 = 65.41f
+private const val NOTE_CS2 = 69.30f
+private const val NOTE_D2 = 73.42f
+private const val NOTE_DS2 = 77.78f
+private const val NOTE_E2 = 82.41f
+private const val NOTE_F2 = 87.31f
+private const val NOTE_FS2 = 92.50f
+private const val NOTE_G2 = 98.00f
+private const val NOTE_GS2 = 103.83f
+private const val NOTE_A2 = 110.00f
+private const val NOTE_AS2 = 116.54f
+private const val NOTE_B2 = 123.47f
 
 private const val NOTE_C3 = 130.81f
 private const val NOTE_CS3 = 138.59f
