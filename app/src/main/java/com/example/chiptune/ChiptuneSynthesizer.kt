@@ -239,8 +239,9 @@ private val leadSequence = floatArrayOf(
             val buffer = ShortArray(1024)
             var sampleIndex = 0L
 
-            // 110 BPM. 4 beats per whole note.
-            val samplesPerWholeNote = (sampleRate * 60.0 / 110.0) * 4.0 / 3.0
+            val bpm = 150.0
+
+            val samplesPerWholeNote = (sampleRate * (60.0 / bpm))
 
             var currentNoteIndex = 0
             var noteSampleCounter = 0L
