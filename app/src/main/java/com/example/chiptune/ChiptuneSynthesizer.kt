@@ -8,7 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import kotlin.math.sin
 
 data class Note(
     val freq: Float,
@@ -124,12 +123,15 @@ enum class SynthType {
 
 class ChiptuneSynthesizer {
     public val currentWaveform = MutableSharedFlow<ShortArray>(replay = 0, extraBufferCapacity = 1)
-private val sampleRate = 44100
-private var audioTrack: AudioTrack? = null
-private var synthesisJob: Job? = null
-private val scope = CoroutineScope(Dispatchers.Default)
+    private val sampleRate = 44100
+    private var audioTrack: AudioTrack? = null
+    private var synthesisJob: Job? = null
+    private var masterSampleIndex = 0L
+    private val scope = CoroutineScope(Dispatchers.Default)
 
-    private val leadSeq = listOf(
+    val channels = mutableListOf<AudioChannel>()
+
+    private val tetrisBass = listOf(
         Note(NOTE_E3, 0.5f),
         Note(NOTE_E4, 0.5f),
         Note(NOTE_E3, 0.5f),
@@ -336,130 +338,48 @@ private val scope = CoroutineScope(Dispatchers.Default)
         Note(REST, 2f),
     )
 
-    private fun generateAudio(synthType: SynthType) {
+    private val drumPattern = listOf(
+        DrumType.Kick, DrumType.HiHat, DrumType.Snare, DrumType.HiHat,
+        DrumType.Kick, DrumType.HiHat, DrumType.Snare, DrumType.HiHat,
+        DrumType.Kick, DrumType.HiHat, DrumType.Snare, DrumType.HiHat,
+        DrumType.Kick, DrumType.Kick, DrumType.Snare, DrumType.HiHat
+    )
+
+    private fun generateAudio() {
         synthesisJob = scope.launch {
-            val buffer = ShortArray(1024)
-            var sampleIndex = 0L
-
-            val bpm = 150.0
-
-            val samplesPerWholeNote = (sampleRate * (60.0 / bpm))
-
-            var currentNoteIndex = 0
-            var noteSampleCounter = 0L
-
-            // OPL2 specific state
-            var phaseModulator = 0.0
-            var phaseCarrier = 0.0
-            var oplEnvelope = 1.0
-            val twoPi = 2.0 * Math.PI
+            val floatBuffer = FloatArray(1024)
+            val shortBuffer = ShortArray(1024)
 
             while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                for (i in buffer.indices) {
-                    val currentNote = leadSeq[currentNoteIndex]
-                    val totalNoteSamples = (samplesPerWholeNote * currentNote.len).toLong()
+                floatBuffer.fill(0f)
 
-                    if (noteSampleCounter >= totalNoteSamples) {
-                        noteSampleCounter = 0L
-                        currentNoteIndex = (currentNoteIndex + 1) % leadSeq.size
-                        
-                        // Reset OPL2 state for new note
-                        phaseModulator = 0.0
-                        phaseCarrier = 0.0
-                        oplEnvelope = 1.0
+                // Render block for each non-muted channel (0 CPU cost for muted channels!)
+                for (ch in channels) {
+                    if (!ch.isMuted) {
+                        ch.renderBlock(floatBuffer, masterSampleIndex, floatBuffer.size, sampleRate)
                     }
+                }
 
-                    val updatedNote = leadSeq[currentNoteIndex]
-                    val leadFreq = updatedNote.freq
-                    val t = sampleIndex / sampleRate.toDouble()
+                // Headroom scaling and 8-bit DAC bit-crush quantization
+                val masterGain = 0.6f
+                for (i in floatBuffer.indices) {
+                    val mixedSignal = (floatBuffer[i] * masterGain).coerceIn(-1.0f, 1.0f)
 
-                    val mixedSignal = if (synthType == SynthType.Opl2) {
-                        if (leadFreq > 0f) {
-                            val incCarrier = twoPi * leadFreq / sampleRate
-                            val incModulator = twoPi * (leadFreq * 3.5) / sampleRate
-
-                            val modIndex = 2.5 * oplEnvelope
-                            // OPL2 Half-sine for modulator
-                            val modOut = if (phaseModulator % (2.0 * Math.PI) < Math.PI) sin(phaseModulator) else 0.0
-                            val finalModOut = modOut * modIndex
-                            
-                            val carrierOut = sin(phaseCarrier + finalModOut) * oplEnvelope
-                            
-                            oplEnvelope *= 0.99992
-                            
-                            phaseModulator = (phaseModulator + incModulator) % twoPi
-                            phaseCarrier = (phaseCarrier + incCarrier) % twoPi
-                            
-                            carrierOut * 0.7
-                        } else {
-                            0.0
-                        }
-                    } else {
-                        // Dynamically assign gate properties based on staccato status
-                        val gateRatio = if (updatedNote.stacatto) 0.5 else 0.85
-
-                        val gateEnvelope = if (noteSampleCounter < totalNoteSamples * gateRatio) {
-                            1.0 // Note is active
-                        } else {
-                            if (updatedNote.stacatto) {
-                                0.0 // Staccato: cut off immediately
-                            } else {
-                                // Standard note: quick linear ramp down to prevent audio pops
-                                val remainingSamples = totalNoteSamples - noteSampleCounter
-                                val gateWindow = totalNoteSamples * (1.0 - gateRatio)
-                                if (gateWindow > 0) {
-                                    (remainingSamples / gateWindow).coerceIn(0.0, 1.0)
-                                } else {
-                                    0.0
-                                }
-                            }
-                        }
-
-                        // Waveform Synthesis Switchboard
-                        val leadSignal = if (leadFreq > 0f) {
-                            val rawSine = sin(2 * Math.PI * leadFreq * t)
-
-                            when (synthType) {
-                                SynthType.Sine -> rawSine
-                                SynthType.Square -> if (rawSine >= 0.0) 1.0 else -1.0
-                                SynthType.Fm2op -> {
-                                    val modulatorFreq = leadFreq * 2.0
-                                    val modulationIndex = 2.2
-                                    val modulator = sin(2 * Math.PI * modulatorFreq * t)
-                                    sin(2 * Math.PI * leadFreq * t + (modulator * modulationIndex))
-                                }
-                                SynthType.Sawtooth -> {
-                                    val period = 1.0 / leadFreq
-                                    val progress = (t % period) / period
-                                    2.0 * progress - 1.0
-                                }
-                                else -> 0.0
-                            }
-                        } else {
-                            0.0
-                        }
-                        leadSignal * 0.30 * gateEnvelope
-                    }
-
-                    // 8-bit DAC Bit-crush step for true vintage hardware grime
                     val amplitude = (mixedSignal * Short.MAX_VALUE).toInt()
                     val bitCrushed = (amplitude shr 8) shl 8
 
-                    buffer[i] = bitCrushed.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-
-                    // Advance counters
-                    sampleIndex++
-                    noteSampleCounter++
+                    shortBuffer[i] = bitCrushed.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
                 }
 
-                currentWaveform.tryEmit(buffer.copyOf())
-                audioTrack?.write(buffer, 0, buffer.size)
+                currentWaveform.tryEmit(shortBuffer.copyOf())
+                audioTrack?.write(shortBuffer, 0, shortBuffer.size)
+
+                masterSampleIndex += floatBuffer.size
             }
         }
     }
-    fun start(
-        synthType: SynthType
-    ) {
+
+    private fun initAudioTrack() {
         if (audioTrack != null) return
 
         val bufferSize = AudioTrack.getMinBufferSize(
@@ -487,64 +407,60 @@ private val scope = CoroutineScope(Dispatchers.Default)
             .build()
 
         audioTrack?.play()
-        generateAudio(synthType = synthType)
     }
-    /*
-    private fun generateAudio() {
-        synthesisJob = scope.launch {
-            val buffer = ShortArray(1024)
-            var sampleIndex = 0L
 
-            // Brisk, bouncy reggae-infused tempo (125 BPM)
-            val samplesPerStep = (sampleRate * 60) / (125 * 4)
-
-            while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                for (i in buffer.indices) {
-                    val currentStep = ((sampleIndex / samplesPerStep) % leadSequence.size).toInt()
-
-                    val leadFreq = leadSequence[currentStep]
-                    val bassFreq = bassSequence[currentStep]
-                    val t = sampleIndex / sampleRate.toDouble()
-
-                    // Channel 1: Lead Melody (Triangle/Saw hybrid wave for an Amiga-style reed texture)
-                    val leadSignal = if (leadFreq > 0f) {
-                        val phase = (t * leadFreq) % 1.0
-                        // Mathematical ramp-up then sharp drop
-                        if (phase < 0.8) (phase / 0.8) * 2.0 - 1.0 else 1.0 - ((phase - 0.8) / 0.2) * 2.0
-                    } else {
-                        0.0
-                    }
-
-                    // Channel 2: Bouncing Bassline (Sharp 10% Duty Cycle Pulse Wave for a SID-chip punch)
-                    val bassSignal = if (bassFreq > 0f) {
-                        val phase = (t * bassFreq) % 1.0
-                        if (phase < 0.10) 1.0 else -1.0
-                    } else {
-                        0.0
-                    }
-
-                    // Mix channels together while leaving some headroom
-                    val mixedSignal = (leadSignal * 0.2) + (bassSignal * 0.25)
-
-                    // Down-quantize to 8-bit to strip out modern smooth resolution
-                    val amplitude = (mixedSignal * Short.MAX_VALUE).toInt()
-                    val bitCrushed = (amplitude shr 8) shl 8
-
-                    buffer[i] = bitCrushed.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-                    sampleIndex++
-                }
-                audioTrack?.write(buffer, 0, buffer.size)
-            }
-        }
-    }
+    /**
+     * Starts synthesis for preview buttons.
      */
+    fun start(synthType: SynthType) {
+        stop()
+        masterSampleIndex = 0L
+        channels.clear()
+        channels.add(
+            SequencedToneChannel(
+                name = "Lead",
+                synthType = synthType,
+                sequence = tetris,
+                dutyCycle = 0.5,
+                volume = 0.35f
+            )
+        )
+        channels.add(
+            SequencedToneChannel(
+                name = "Bass",
+                synthType = synthType,
+                sequence = tetrisBass,
+                dutyCycle = 0.25,
+                volume = 0.40f
+            )
+        )
+        initAudioTrack()
+        generateAudio()
+    }
+
+    /**
+     * Seeks playback to a specific timeline sample position.
+     */
+    fun seekToSample(sampleIndex: Long) {
+        masterSampleIndex = sampleIndex
+    }
+
+    /**
+     * Seeks playback to a specific timeline offset in seconds.
+     */
+    fun seekSeconds(seconds: Double) {
+        masterSampleIndex = (seconds * sampleRate).toLong()
+    }
 
     fun stop() {
         synthesisJob?.cancel()
+        synthesisJob = null
         audioTrack?.apply {
             stop()
             release()
         }
         audioTrack = null
+        masterSampleIndex = 0L
+        channels.forEach { it.reset() }
     }
 }
