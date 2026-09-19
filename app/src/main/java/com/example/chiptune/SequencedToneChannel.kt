@@ -9,7 +9,8 @@ class SequencedToneChannel(
     val sequence: List<Note>,
     val bpm: Double = 150.0,
     override var isMuted: Boolean = false,
-    val dutyCycle: Double = 0.5
+    val dutyCycle: Double = 0.5,
+    val loop: Boolean = true
 ) : AudioChannel {
 
     override fun reset() {
@@ -38,7 +39,15 @@ class SequencedToneChannel(
 
         for (i in 0 until numSamples) {
             val currentSample = startSampleIndex + i
-            val loopSample = (currentSample % totalSequenceSamples + totalSequenceSamples) % totalSequenceSamples
+            if (!loop && currentSample >= totalSequenceSamples) {
+                continue
+            }
+
+            val loopSample = if (loop) {
+                (currentSample % totalSequenceSamples + totalSequenceSamples) % totalSequenceSamples
+            } else {
+                currentSample
+            }
 
             if (loopSample < noteStartSamples[activeNoteIdx] || loopSample >= noteStartSamples[activeNoteIdx] + noteTotalSamples[activeNoteIdx]) {
                 activeNoteIdx = sequence.indices.firstOrNull { idx ->

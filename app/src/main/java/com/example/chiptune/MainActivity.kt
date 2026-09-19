@@ -27,6 +27,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.chiptune.ui.navigation.AppRoute
 import com.example.chiptune.ui.screens.sine.SineScreen
+import com.example.chiptune.ui.screens.smb.SmbScreen
 import com.example.chiptune.ui.screens.tetris.TetrisScreen
 import com.example.chiptune.ui.theme.ChipTuneTheme
 
@@ -76,6 +77,9 @@ fun MainApp() {
                 entry<AppRoute.Sine> {
                     SineScreen(modifier = Modifier.padding(innerPadding))
                 }
+                entry<AppRoute.Smb> {
+                    SmbScreen(modifier = Modifier.padding(innerPadding))
+                }
             }
         )
     }
@@ -106,7 +110,7 @@ fun TopNavBar(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val routes = listOf(AppRoute.Tetris, AppRoute.Sine)
+                val routes = listOf(AppRoute.Tetris, AppRoute.Sine, AppRoute.Smb)
                 routes.forEach { route ->
                     val isSelected = currentRoute == route
                     if (isSelected) {

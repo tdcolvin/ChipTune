@@ -74,6 +74,45 @@ private const val NOTE_C6 = 1046.50f
 
 private const val REST    = 0.00f
 
+// The classic 32-step Tetris opening melody loop
+/*
+private val leadSequenceTetris = floatArrayOf(
+    NOTE_E5, REST,    NOTE_B4, NOTE_C5, NOTE_D5, REST,    NOTE_C5, NOTE_B4,
+    NOTE_A4, REST,    NOTE_A4, NOTE_C5, NOTE_E5, REST,    NOTE_D5, NOTE_C5,
+    NOTE_B4, REST,    REST,    NOTE_C5, NOTE_D5, REST,    NOTE_E5, REST,
+    NOTE_C5, REST,    NOTE_A4, REST,    NOTE_A4, REST,    REST,    REST
+)
+
+// The iconic bouncing bassline that gives Tetris its momentum
+private val bassSequenceTetris = floatArrayOf(
+    NOTE_A3, NOTE_E4, NOTE_A3, NOTE_E4, NOTE_D4, NOTE_F4, NOTE_D4, NOTE_F4,
+    NOTE_C4, NOTE_E4, NOTE_C4, NOTE_E4, NOTE_E3, NOTE_B4, NOTE_E3, NOTE_B4,
+    NOTE_A3, NOTE_E4, NOTE_A3, NOTE_E4, NOTE_D4, NOTE_F4, NOTE_D4, NOTE_F4,
+    NOTE_C4, NOTE_E4, NOTE_A3, NOTE_E4, NOTE_A3, NOTE_E3, NOTE_A3, REST
+)
+
+private const val NOTE_D3 = 146.83f
+private const val NOTE_G3 = 196.00f
+private const val NOTE_Bb3 = 233.08f
+private const val NOTE_Bb4 = 466.16f
+
+
+// The iconic opening woodwind / synth lead hook
+private val leadSequence = floatArrayOf(
+    NOTE_D4, REST,    NOTE_F4, NOTE_G4, NOTE_A4, REST,    NOTE_Bb4, NOTE_A4,
+    NOTE_G4, REST,    NOTE_F4, NOTE_G4, NOTE_A4, REST,    REST,     REST,
+    NOTE_D4, REST,    NOTE_F4, NOTE_G4, NOTE_A4, REST,    NOTE_C5,  NOTE_A4,
+    NOTE_G4, REST,    NOTE_F4, NOTE_E4, NOTE_D4, REST,    REST,     REST
+)
+
+// The classic reggae-style syncopated bassline
+private val bassSequence = floatArrayOf(
+    NOTE_D3, REST,    REST,    NOTE_D3, NOTE_G3, REST,    REST,     NOTE_G3,
+    NOTE_A3, REST,    REST,    NOTE_A3, NOTE_D3, REST,    REST,     REST,
+    NOTE_D3, REST,    REST,    NOTE_D3, NOTE_F3, REST,    REST,     NOTE_F3, // F3 is 174.61f
+    NOTE_C4, REST,    NOTE_Bb3,REST,    NOTE_D3, REST,    REST,     REST
+)*/
+
 enum class SynthType {
     Sine,
     Square,
@@ -330,6 +369,48 @@ class ChiptuneSynthesizer {
         Note(REST, 2f),
     )
 
+    val smbMelody = listOf(
+        // Bar 1
+        Note(NOTE_E5, 0.5f),
+        Note(NOTE_E5, 0.5f),
+        Note(REST, 0.5f),
+        Note(NOTE_E5, 0.5f),
+        Note(REST, 0.5f),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_E5, 1.0f, stacatto = true),
+        Note(NOTE_G5, 1.0f, stacatto = true),
+        Note(REST, 1.0f),
+        Note(NOTE_G4, 1.0f, stacatto = true),
+        Note(REST, 1.0f),
+
+        // Bar 2
+        Note(NOTE_C5, 1f, stacatto = true),
+        Note(REST, 0.5f),
+        Note(NOTE_G4, 1f, stacatto = true),
+        Note(REST, 0.5f),
+        Note(NOTE_E4, 1f, stacatto = true),
+        Note(REST, 0.5f),
+
+        Note(NOTE_A4, 1f, stacatto = true),
+        Note(NOTE_B4, 1f, stacatto = true),
+        Note(NOTE_AS4, 0.5f),
+        Note(NOTE_A4, 1f, stacatto = true),
+
+        Note(NOTE_G4, 2.0f/3.0f, stacatto = true),
+        Note(NOTE_E5, 2.0f/3.0f, stacatto = true),
+        Note(NOTE_G5, 2.0f/3.0f, stacatto = true),
+        Note(NOTE_A5, 1f, stacatto = true),
+        Note(NOTE_F5, 0.5f),
+        Note(NOTE_G5, 0.5f),
+
+        Note(REST, 0.5f),
+        Note(NOTE_E5, 1.0f, stacatto = true),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_D5, 0.5f),
+        Note(NOTE_B4, 1.0f, stacatto = true),
+        Note(REST, 0.5f),
+    )
+
     private val drumPattern = listOf(
         DrumType.Kick, DrumType.HiHat, DrumType.Snare, DrumType.HiHat,
         DrumType.Kick, DrumType.HiHat, DrumType.Snare, DrumType.HiHat,
@@ -417,6 +498,87 @@ class ChiptuneSynthesizer {
             .build()
 
         audioTrack?.play()
+    }
+
+    /**
+     * Plays a sequence through once and stops automatically.
+     */
+    fun playOnce(
+        sequence: List<Note>,
+        synthType: SynthType = SynthType.Square,
+        bpm: Double = 180.0,
+        onComplete: (() -> Unit)? = null
+    ) {
+        stop()
+        masterSampleIndex = 0L
+        channels.clear()
+
+        val totalBeats = sequence.sumOf { it.len.toDouble() }
+        val samplesPerBeat = sampleRate * (60.0 / bpm)
+        val totalSamples = (totalBeats * samplesPerBeat).toLong()
+
+        channels.add(
+            SequencedToneChannel(
+                name = "Lead",
+                synthType = synthType,
+                sequence = sequence,
+                bpm = bpm,
+                dutyCycle = 0.5,
+                loop = false
+            )
+        )
+
+        initAudioTrack()
+
+        synthesisJob = scope.launch {
+            val floatBuffer = FloatArray(1024)
+            val masterFloatBuffer = FloatArray(1024)
+
+            while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING && masterSampleIndex < totalSamples) {
+                floatBuffer.fill(0f)
+                masterFloatBuffer.fill(0f)
+
+                val currentChannels = channels.toList()
+                val channelWavesMap = mutableMapOf<String, FloatArray>()
+
+                for (ch in currentChannels) {
+                    val chFloatBuffer = FloatArray(floatBuffer.size)
+                    if (!ch.isMuted) {
+                        ch.renderBlock(chFloatBuffer, masterSampleIndex, chFloatBuffer.size, sampleRate)
+                    }
+
+                    val chWaveform = FloatArray(chFloatBuffer.size)
+                    for (i in chFloatBuffer.indices) {
+                        chWaveform[i] = chFloatBuffer[i].coerceIn(-1.0f, 1.0f)
+                    }
+                    channelWavesMap[ch.name] = chWaveform
+
+                    if (!ch.isMuted) {
+                        val vol = channelVolumes[ch.name] ?: 0.5f
+                        for (i in floatBuffer.indices) {
+                            floatBuffer[i] += chFloatBuffer[i] * vol
+                        }
+                    }
+                }
+
+                val masterGain = 0.6f
+                for (i in floatBuffer.indices) {
+                    val mixedSignal = (floatBuffer[i] * masterGain).coerceIn(-1.0f, 1.0f)
+                    masterFloatBuffer[i] = mixedSignal
+                }
+
+                val mixedWave = masterFloatBuffer.copyOf()
+                currentWaveform.tryEmit(mixedWave)
+                waveformData.tryEmit(WaveformData(mixed = mixedWave, channelWaveforms = channelWavesMap))
+
+                audioTrack?.write(masterFloatBuffer, 0, masterFloatBuffer.size, AudioTrack.WRITE_BLOCKING)
+
+                masterSampleIndex += floatBuffer.size
+            }
+
+            stop()
+            onComplete?.invoke()
+        }
     }
 
     /**
