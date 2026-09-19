@@ -3,7 +3,6 @@ package com.example.chiptune
 interface AudioChannel {
     val name: String
     var isMuted: Boolean
-    var volume: Float
 
     /**
      * Renders [numSamples] audio frames into [outBuffer] starting at master timeline position [startSampleIndex].

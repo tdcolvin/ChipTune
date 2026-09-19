@@ -8,7 +8,6 @@ class SequencedToneChannel(
     var synthType: SynthType,
     val sequence: List<Note>,
     val bpm: Double = 150.0,
-    override var volume: Float = 0.3f,
     override var isMuted: Boolean = false,
     val dutyCycle: Double = 0.5
 ) : AudioChannel {
@@ -112,7 +111,7 @@ class SequencedToneChannel(
                 rawSignal * gateEnvelope
             }
 
-            outBuffer[i] += (signal * volume).toFloat()
+            outBuffer[i] += signal.toFloat()
         }
     }
 }

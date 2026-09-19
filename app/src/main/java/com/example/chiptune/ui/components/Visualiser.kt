@@ -12,7 +12,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 @Composable
 fun Visualiser(
     modifier: Modifier = Modifier,
-    wavedata: ShortArray
+    wavedata: ShortArray,
+    lineColor: Color = Color.Green
 ) {
     val samples = 100
     val firstNegative = wavedata.indexOfFirst { it < 0 }
@@ -25,12 +26,26 @@ fun Visualiser(
         val zeroY = size.height / 2
         val path = Path()
         path.moveTo(0f, zeroY)
-        val plotdata = if (zeroCrossing < 0) listOf() else wavedata.drop(zeroCrossing).take(samples)
-        plotdata.forEachIndexed { index, amplitude ->
-            path.lineTo(index * size.width / plotdata.size.toFloat(), (amplitude / Short.MAX_VALUE.toFloat()) * size.height + zeroY)
-        }
-        drawPath(path, Color.Green, style = Stroke(width = 7f))
 
-        drawLine(Color.Red, Offset(0f, zeroY), Offset(size.width, zeroY))
+        val plotdata = if (zeroCrossing < 0) {
+            if (wavedata.isNotEmpty()) wavedata.toList().take(samples) else emptyList()
+        } else {
+            wavedata.drop(zeroCrossing).take(samples)
+        }
+
+        if (plotdata.isNotEmpty()) {
+            plotdata.forEachIndexed { index, amplitude ->
+                path.lineTo(
+                    index * size.width / plotdata.size.toFloat(),
+                    -(amplitude / Short.MAX_VALUE.toFloat()) * (size.height / 2f) + zeroY
+                )
+            }
+        } else {
+            path.lineTo(size.width, zeroY)
+        }
+
+        drawPath(path, lineColor, style = Stroke(width = 5f))
+
+        drawLine(Color.Red.copy(alpha = 0.5f), Offset(0f, zeroY), Offset(size.width, zeroY))
     }
 }

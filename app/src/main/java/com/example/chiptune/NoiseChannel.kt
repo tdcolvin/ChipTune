@@ -15,7 +15,6 @@ class NoiseChannel(
     val pattern: List<DrumType>,
     val bpm: Double = 150.0,
     val stepLen: Float = 0.25f,
-    override var volume: Float = 0.25f,
     override var isMuted: Boolean = false
 ) : AudioChannel {
 
@@ -78,7 +77,7 @@ class NoiseChannel(
                 DrumType.None -> 0.0
             }
 
-            outBuffer[i] += (signal * volume).toFloat()
+            outBuffer[i] += signal.toFloat()
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.chiptune.AudioChannel
 import com.example.chiptune.ChiptuneSynthesizer
 import com.example.chiptune.SynthType
+import com.example.chiptune.WaveformData
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -18,6 +19,13 @@ class TetrisViewModel : ViewModel() {
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ShortArray(0)
+        )
+
+    val waveformData: StateFlow<WaveformData> = synth.waveformData
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = WaveformData()
         )
 
     val channelList = mutableStateListOf<AudioChannel>()

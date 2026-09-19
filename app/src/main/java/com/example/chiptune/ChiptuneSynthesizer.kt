@@ -121,8 +121,32 @@ enum class SynthType {
     Opl2
 }
 
+data class WaveformData(
+    val mixed: ShortArray = ShortArray(0),
+    val channelWaveforms: Map<String, ShortArray> = emptyMap()
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is WaveformData) return false
+        if (!mixed.contentEquals(other.mixed)) return false
+        if (channelWaveforms.size != other.channelWaveforms.size) return false
+        for ((k, v) in channelWaveforms) {
+            val otherV = other.channelWaveforms[k] ?: return false
+            if (!v.contentEquals(otherV)) return false
+        }
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = mixed.contentHashCode()
+        result = 31 * result + channelWaveforms.hashCode()
+        return result
+    }
+}
+
 class ChiptuneSynthesizer {
     public val currentWaveform = MutableSharedFlow<ShortArray>(replay = 0, extraBufferCapacity = 1)
+    public val waveformData = MutableSharedFlow<WaveformData>(replay = 0, extraBufferCapacity = 1)
     private val sampleRate = 44100
     private var audioTrack: AudioTrack? = null
     private var synthesisJob: Job? = null
@@ -130,6 +154,13 @@ class ChiptuneSynthesizer {
     private val scope = CoroutineScope(Dispatchers.Default)
 
     val channels = mutableListOf<AudioChannel>()
+
+    // Mixer volume configuration per channel
+    private val channelVolumes = mapOf(
+        "Lead" to 0.35f,
+        "Bass" to 0.40f,
+        "Percussion" to 0.25f
+    )
 
     private val tetrisBass = listOf(
         Note(NOTE_E3, 0.5f),
@@ -353,10 +384,29 @@ class ChiptuneSynthesizer {
             while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
                 floatBuffer.fill(0f)
 
-                // Render block for each non-muted channel (0 CPU cost for muted channels!)
-                for (ch in channels) {
+                val currentChannels = channels.toList()
+                val channelWavesMap = mutableMapOf<String, ShortArray>()
+
+                for (ch in currentChannels) {
+                    val chFloatBuffer = FloatArray(floatBuffer.size)
                     if (!ch.isMuted) {
-                        ch.renderBlock(floatBuffer, masterSampleIndex, floatBuffer.size, sampleRate)
+                        ch.renderBlock(chFloatBuffer, masterSampleIndex, chFloatBuffer.size, sampleRate)
+                    }
+
+                    // 100% full-scale waveform for individual channel visualiser
+                    val chShortBuffer = ShortArray(chFloatBuffer.size)
+                    for (i in chFloatBuffer.indices) {
+                        val amplitude = (chFloatBuffer[i].coerceIn(-1.0f, 1.0f) * Short.MAX_VALUE).toInt()
+                        chShortBuffer[i] = amplitude.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                    }
+                    channelWavesMap[ch.name] = chShortBuffer
+
+                    // Scale by channel volume in mixer when mixing into master audio
+                    if (!ch.isMuted) {
+                        val vol = channelVolumes[ch.name] ?: 0.3f
+                        for (i in floatBuffer.indices) {
+                            floatBuffer[i] += chFloatBuffer[i] * vol
+                        }
                     }
                 }
 
@@ -371,7 +421,10 @@ class ChiptuneSynthesizer {
                     shortBuffer[i] = bitCrushed.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
                 }
 
-                currentWaveform.tryEmit(shortBuffer.copyOf())
+                val mixedWave = shortBuffer.copyOf()
+                currentWaveform.tryEmit(mixedWave)
+                waveformData.tryEmit(WaveformData(mixed = mixedWave, channelWaveforms = channelWavesMap))
+
                 audioTrack?.write(shortBuffer, 0, shortBuffer.size)
 
                 masterSampleIndex += floatBuffer.size
@@ -421,8 +474,7 @@ class ChiptuneSynthesizer {
                 name = "Lead",
                 synthType = synthType,
                 sequence = tetris,
-                dutyCycle = 0.5,
-                volume = 0.35f
+                dutyCycle = 0.5
             )
         )
         channels.add(
@@ -430,8 +482,13 @@ class ChiptuneSynthesizer {
                 name = "Bass",
                 synthType = synthType,
                 sequence = tetrisBass,
-                dutyCycle = 0.25,
-                volume = 0.40f
+                dutyCycle = 0.25
+            )
+        )
+        channels.add(
+            NoiseChannel(
+                name = "Percussion",
+                pattern = drumPattern
             )
         )
         initAudioTrack()
