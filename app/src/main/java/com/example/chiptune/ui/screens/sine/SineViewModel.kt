@@ -98,30 +98,25 @@ class SineViewModel : ViewModel() {
         track.play()
 
         audioJob = viewModelScope.launch(Dispatchers.Default) {
-            val bufferChunkSize = 1024
+            val bufferChunkSize = track.bufferSizeInFrames
             val floatBuffer = FloatArray(bufferChunkSize)
 
             // 'n' tracks the absolute sample index since playback started
             var n = 0L
 
             while (_isPlaying.value && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                val f = currentFrequency.toDouble()
-                val A = currentAmplitude.toDouble() // Assuming A is normalised between 0.0 and 1.0
-                val fs = sampleRate.toDouble()
+                val f = currentFrequency
+                val A = currentAmplitude
+                val fs = sampleRate
 
                 for (i in 0 until bufferChunkSize) {
-                    // The direct implementation of x[n] = A * sin(2π * f * (n / fs))
                     val x_n = A * sin(2.0 * Math.PI * f * (n / fs))
-
-                    // PCM float audio natively expects values in the range [-1.0f, 1.0f]
                     floatBuffer[i] = x_n.toFloat()
-
-                    n++ // Advance to the next discrete sample
+                    n++
                 }
 
                 _waveform.value = floatBuffer.copyOf()
 
-                // Writing a FloatArray to AudioTrack requires the writeMode parameter
                 track.write(floatBuffer, 0, bufferChunkSize, AudioTrack.WRITE_BLOCKING)
             }
         }
