@@ -1,0 +1,48 @@
+package com.example.chiptune.ui.screens.tetris
+
+import androidx.compose.runtime.mutableStateListOf
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.chiptune.AudioChannel
+import com.example.chiptune.ChiptuneSynthesizer
+import com.example.chiptune.SynthType
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+
+class TetrisViewModel : ViewModel() {
+    private val synth = ChiptuneSynthesizer()
+
+    val waveData: StateFlow<ShortArray> = synth.currentWaveform
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ShortArray(0)
+        )
+
+    val channelList = mutableStateListOf<AudioChannel>()
+
+    fun startSynth(synthType: SynthType) {
+        synth.start(synthType)
+        updateChannelList()
+    }
+
+    fun stopSynth() {
+        synth.stop()
+        updateChannelList()
+    }
+
+    fun toggleMute(channel: AudioChannel) {
+        channel.isMuted = !channel.isMuted
+        updateChannelList()
+    }
+
+    private fun updateChannelList() {
+        channelList.clear()
+        channelList.addAll(synth.channels)
+    }
+
+    override fun onCleared() {
+        synth.stop()
+    }
+}
