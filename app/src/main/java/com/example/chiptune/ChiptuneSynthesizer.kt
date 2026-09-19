@@ -74,45 +74,6 @@ private const val NOTE_C6 = 1046.50f
 
 private const val REST    = 0.00f
 
-// The classic 32-step Tetris opening melody loop
-/*
-private val leadSequenceTetris = floatArrayOf(
-    NOTE_E5, REST,    NOTE_B4, NOTE_C5, NOTE_D5, REST,    NOTE_C5, NOTE_B4,
-    NOTE_A4, REST,    NOTE_A4, NOTE_C5, NOTE_E5, REST,    NOTE_D5, NOTE_C5,
-    NOTE_B4, REST,    REST,    NOTE_C5, NOTE_D5, REST,    NOTE_E5, REST,
-    NOTE_C5, REST,    NOTE_A4, REST,    NOTE_A4, REST,    REST,    REST
-)
-
-// The iconic bouncing bassline that gives Tetris its momentum
-private val bassSequenceTetris = floatArrayOf(
-    NOTE_A3, NOTE_E4, NOTE_A3, NOTE_E4, NOTE_D4, NOTE_F4, NOTE_D4, NOTE_F4,
-    NOTE_C4, NOTE_E4, NOTE_C4, NOTE_E4, NOTE_E3, NOTE_B4, NOTE_E3, NOTE_B4,
-    NOTE_A3, NOTE_E4, NOTE_A3, NOTE_E4, NOTE_D4, NOTE_F4, NOTE_D4, NOTE_F4,
-    NOTE_C4, NOTE_E4, NOTE_A3, NOTE_E4, NOTE_A3, NOTE_E3, NOTE_A3, REST
-)
-
-private const val NOTE_D3 = 146.83f
-private const val NOTE_G3 = 196.00f
-private const val NOTE_Bb3 = 233.08f
-private const val NOTE_Bb4 = 466.16f
-
-
-// The iconic opening woodwind / synth lead hook
-private val leadSequence = floatArrayOf(
-    NOTE_D4, REST,    NOTE_F4, NOTE_G4, NOTE_A4, REST,    NOTE_Bb4, NOTE_A4,
-    NOTE_G4, REST,    NOTE_F4, NOTE_G4, NOTE_A4, REST,    REST,     REST,
-    NOTE_D4, REST,    NOTE_F4, NOTE_G4, NOTE_A4, REST,    NOTE_C5,  NOTE_A4,
-    NOTE_G4, REST,    NOTE_F4, NOTE_E4, NOTE_D4, REST,    REST,     REST
-)
-
-// The classic reggae-style syncopated bassline
-private val bassSequence = floatArrayOf(
-    NOTE_D3, REST,    REST,    NOTE_D3, NOTE_G3, REST,    REST,     NOTE_G3,
-    NOTE_A3, REST,    REST,    NOTE_A3, NOTE_D3, REST,    REST,     REST,
-    NOTE_D3, REST,    REST,    NOTE_D3, NOTE_F3, REST,    REST,     NOTE_F3, // F3 is 174.61f
-    NOTE_C4, REST,    NOTE_Bb3,REST,    NOTE_D3, REST,    REST,     REST
-)*/
-
 enum class SynthType {
     Sine,
     Square,
@@ -122,8 +83,8 @@ enum class SynthType {
 }
 
 data class WaveformData(
-    val mixed: ShortArray = ShortArray(0),
-    val channelWaveforms: Map<String, ShortArray> = emptyMap()
+    val mixed: FloatArray = FloatArray(0),
+    val channelWaveforms: Map<String, FloatArray> = emptyMap()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -145,7 +106,7 @@ data class WaveformData(
 }
 
 class ChiptuneSynthesizer {
-    public val currentWaveform = MutableSharedFlow<ShortArray>(replay = 0, extraBufferCapacity = 1)
+    public val currentWaveform = MutableSharedFlow<FloatArray>(replay = 0, extraBufferCapacity = 1)
     public val waveformData = MutableSharedFlow<WaveformData>(replay = 0, extraBufferCapacity = 1)
     private val sampleRate = 44100
     private var audioTrack: AudioTrack? = null
@@ -379,13 +340,14 @@ class ChiptuneSynthesizer {
     private fun generateAudio() {
         synthesisJob = scope.launch {
             val floatBuffer = FloatArray(1024)
-            val shortBuffer = ShortArray(1024)
+            val masterFloatBuffer = FloatArray(1024)
 
             while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
                 floatBuffer.fill(0f)
+                masterFloatBuffer.fill(0f)
 
                 val currentChannels = channels.toList()
-                val channelWavesMap = mutableMapOf<String, ShortArray>()
+                val channelWavesMap = mutableMapOf<String, FloatArray>()
 
                 for (ch in currentChannels) {
                     val chFloatBuffer = FloatArray(floatBuffer.size)
@@ -394,12 +356,11 @@ class ChiptuneSynthesizer {
                     }
 
                     // 100% full-scale waveform for individual channel visualiser
-                    val chShortBuffer = ShortArray(chFloatBuffer.size)
+                    val chWaveform = FloatArray(chFloatBuffer.size)
                     for (i in chFloatBuffer.indices) {
-                        val amplitude = (chFloatBuffer[i].coerceIn(-1.0f, 1.0f) * Short.MAX_VALUE).toInt()
-                        chShortBuffer[i] = amplitude.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                        chWaveform[i] = chFloatBuffer[i].coerceIn(-1.0f, 1.0f)
                     }
-                    channelWavesMap[ch.name] = chShortBuffer
+                    channelWavesMap[ch.name] = chWaveform
 
                     // Scale by channel volume in mixer when mixing into master audio
                     if (!ch.isMuted) {
@@ -410,22 +371,18 @@ class ChiptuneSynthesizer {
                     }
                 }
 
-                // Headroom scaling and 8-bit DAC bit-crush quantization
+                // Headroom scaling and output preparation
                 val masterGain = 0.6f
                 for (i in floatBuffer.indices) {
                     val mixedSignal = (floatBuffer[i] * masterGain).coerceIn(-1.0f, 1.0f)
-
-                    val amplitude = (mixedSignal * Short.MAX_VALUE).toInt()
-                    val bitCrushed = (amplitude shr 8) shl 8
-
-                    shortBuffer[i] = bitCrushed.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                    masterFloatBuffer[i] = mixedSignal
                 }
 
-                val mixedWave = shortBuffer.copyOf()
+                val mixedWave = masterFloatBuffer.copyOf()
                 currentWaveform.tryEmit(mixedWave)
                 waveformData.tryEmit(WaveformData(mixed = mixedWave, channelWaveforms = channelWavesMap))
 
-                audioTrack?.write(shortBuffer, 0, shortBuffer.size)
+                audioTrack?.write(masterFloatBuffer, 0, masterFloatBuffer.size, AudioTrack.WRITE_BLOCKING)
 
                 masterSampleIndex += floatBuffer.size
             }
@@ -438,7 +395,7 @@ class ChiptuneSynthesizer {
         val bufferSize = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
+            AudioFormat.ENCODING_PCM_FLOAT
         )
 
         audioTrack = AudioTrack.Builder()
@@ -450,7 +407,7 @@ class ChiptuneSynthesizer {
             )
             .setAudioFormat(
                 AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
                     .setSampleRate(sampleRate)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()

@@ -104,7 +104,7 @@ fun TetrisScreen(
 
             viewModel.channelList.forEachIndexed { index, ch ->
                 val color = channelColors[index % channelColors.size]
-                val wave = waveformData.channelWaveforms[ch.name] ?: ShortArray(0)
+                val wave = waveformData.channelWaveforms[ch.name] ?: FloatArray(0)
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),

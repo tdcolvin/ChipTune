@@ -14,11 +14,11 @@ import kotlinx.coroutines.flow.stateIn
 class TetrisViewModel : ViewModel() {
     private val synth = ChiptuneSynthesizer()
 
-    val waveData: StateFlow<ShortArray> = synth.currentWaveform
+    val waveData: StateFlow<FloatArray> = synth.currentWaveform
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ShortArray(0)
+            initialValue = FloatArray(0)
         )
 
     val waveformData: StateFlow<WaveformData> = synth.waveformData

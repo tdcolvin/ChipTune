@@ -12,12 +12,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 @Composable
 fun Visualiser(
     modifier: Modifier = Modifier,
-    wavedata: ShortArray,
+    wavedata: FloatArray,
     lineColor: Color = Color.Green
 ) {
     val samples = 100
-    val firstNegative = wavedata.indexOfFirst { it < 0 }
-    val positiveCrossing = if (firstNegative < 0) -1 else wavedata.drop(firstNegative).indexOfFirst { it >= 0 }
+    val firstNegative = wavedata.indexOfFirst { it < 0f }
+    val positiveCrossing = if (firstNegative < 0) -1 else wavedata.drop(firstNegative).indexOfFirst { it >= 0f }
     val zeroCrossing = if (positiveCrossing < 0) -1 else positiveCrossing + firstNegative
 
     Log.v("plot", "firstNegative=$firstNegative, positiveCrossing=$positiveCrossing, zeroCrossing=$zeroCrossing")
@@ -37,7 +37,7 @@ fun Visualiser(
             plotdata.forEachIndexed { index, amplitude ->
                 path.lineTo(
                     index * size.width / plotdata.size.toFloat(),
-                    -(amplitude / Short.MAX_VALUE.toFloat()) * (size.height / 2f) + zeroY
+                    -amplitude * (size.height / 2f) + zeroY
                 )
             }
         } else {
