@@ -7,9 +7,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +57,8 @@ fun MainApp() {
                         backStack.clear()
                         backStack.add(route)
                     }
-                }
+                },
+                windowInsets = WindowInsets.statusBars
             )
         }
     ) { innerPadding ->
@@ -81,7 +85,8 @@ fun MainApp() {
 fun TopNavBar(
     currentRoute: AppRoute,
     onNavigateTo: (AppRoute) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    windowInsets: WindowInsets = WindowInsets.statusBars
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -93,14 +98,10 @@ fun TopNavBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(windowInsets)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
-                text = "Navigation",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
