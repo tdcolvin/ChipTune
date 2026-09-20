@@ -21,4 +21,9 @@ sealed interface AppRoute : NavKey {
     data object Smb : AppRoute {
         override val title: String = "SMB"
     }
+
+    @Serializable
+    data object Waves : AppRoute {
+        override val title: String = "Waves"
+    }
 }
