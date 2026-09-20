@@ -27,9 +27,9 @@ enum class WaveformType(
     ),
     SQUARE(
         displayName = "Square",
-        formulaTitle = "Square Wave Formula (50% Duty Cycle)",
-        formulaExpression = "y(t) = if ((t × f) mod 1.0 < 0.5) A else -A",
-        description = "Classic 8-bit retro gaming wave containing odd harmonics."
+        formulaTitle = "Square Wave Formula",
+        formulaExpression = "y(t) = if ((t × f) mod 1.0 < d) A else -A",
+        description = "Classic 8-bit retro gaming wave. Duty cycle controls pulse width."
     ),
     SAWTOOTH(
         displayName = "Sawtooth",
@@ -39,69 +39,91 @@ enum class WaveformType(
     )
 }
 
-data class PianoNote(
-    val name: String,
-    val frequency: Float,
-    val isBlack: Boolean
-)
-
-// 1-Octave scale from C4 (261.63 Hz) to C5 (523.25 Hz)
-val OCTAVE_NOTES = listOf(
-    PianoNote("C4", 261.63f, isBlack = false),
-    PianoNote("C#4", 277.18f, isBlack = true),
-    PianoNote("D4", 293.66f, isBlack = false),
-    PianoNote("D#4", 311.13f, isBlack = true),
-    PianoNote("E4", 329.63f, isBlack = false),
-    PianoNote("F4", 349.23f, isBlack = false),
-    PianoNote("F#4", 369.99f, isBlack = true),
-    PianoNote("G4", 392.00f, isBlack = false),
-    PianoNote("G#4", 415.30f, isBlack = true),
-    PianoNote("A4", 440.00f, isBlack = false),
-    PianoNote("A#4", 466.16f, isBlack = true),
-    PianoNote("B4", 493.88f, isBlack = false),
-    PianoNote("C5", 523.25f, isBlack = false)
-)
-
 class WavesViewModel : ViewModel() {
 
     private val sampleRate = 44100
 
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
     private val _selectedWaveform = MutableStateFlow(WaveformType.SINE)
     val selectedWaveform: StateFlow<WaveformType> = _selectedWaveform.asStateFlow()
 
-    private val _activeNote = MutableStateFlow<PianoNote?>(null)
-    val activeNote: StateFlow<PianoNote?> = _activeNote.asStateFlow()
+    private val _frequency = MutableStateFlow(440f) // Default 440 Hz
+    val frequency: StateFlow<Float> = _frequency.asStateFlow()
 
-    private val _amplitude = MutableStateFlow(0.5f)
+    private val _amplitude = MutableStateFlow(0.5f) // Default 50%
     val amplitude: StateFlow<Float> = _amplitude.asStateFlow()
+
+    private val _dutyCycle = MutableStateFlow(0.5f) // Default 50% duty cycle
+    val dutyCycle: StateFlow<Float> = _dutyCycle.asStateFlow()
 
     private val _waveform = MutableStateFlow(FloatArray(1024))
     val waveform: StateFlow<FloatArray> = _waveform.asStateFlow()
 
-    // Single-note priority stack for monophonic playback (no chords allowed)
-    private val activeNotesStack = mutableListOf<PianoNote>()
+    private var audioTrack: AudioTrack? = null
+    private var audioJob: Job? = null
 
     @Volatile
     private var currentWaveform = WaveformType.SINE
 
     @Volatile
-    private var currentFrequency = 0f
+    private var currentFrequency = 440f
 
     @Volatile
-    private var targetAmplitude = 0.5f
+    private var currentAmplitude = 0.5f
 
     @Volatile
-    private var isEngineRunning = true
-
-    private var audioTrack: AudioTrack? = null
-    private var audioJob: Job? = null
+    private var currentDutyCycle = 0.5f
 
     init {
-        startAudioEngine()
         generatePreviewWaveform()
     }
 
-    private fun startAudioEngine() {
+    fun setWaveform(waveform: WaveformType) {
+        _selectedWaveform.value = waveform
+        currentWaveform = waveform
+        if (!_isPlaying.value) {
+            generatePreviewWaveform()
+        }
+    }
+
+    fun setFrequency(freq: Float) {
+        _frequency.value = freq
+        currentFrequency = freq
+        if (!_isPlaying.value) {
+            generatePreviewWaveform()
+        }
+    }
+
+    fun setAmplitude(amp: Float) {
+        _amplitude.value = amp
+        currentAmplitude = amp
+        if (!_isPlaying.value) {
+            generatePreviewWaveform()
+        }
+    }
+
+    fun setDutyCycle(duty: Float) {
+        _dutyCycle.value = duty
+        currentDutyCycle = duty
+        if (!_isPlaying.value) {
+            generatePreviewWaveform()
+        }
+    }
+
+    fun togglePlay() {
+        if (_isPlaying.value) {
+            stop()
+        } else {
+            start()
+        }
+    }
+
+    fun start() {
+        if (_isPlaying.value) return
+        _isPlaying.value = true
+
         val bufferSize = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_MONO,
@@ -134,146 +156,44 @@ class WavesViewModel : ViewModel() {
             val floatBuffer = FloatArray(bufferChunkSize)
 
             var n = 0L // Absolute sample counter
-            var renderedGain = 0f
 
-            while (isEngineRunning && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+            while (_isPlaying.value && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                 val wave = currentWaveform
-                val freq = currentFrequency
-                val baseAmp = targetAmplitude
+                val f = currentFrequency
+                val A = currentAmplitude
+                val d = currentDutyCycle
                 val fs = sampleRate.toDouble()
                 val twoPi = 2.0 * Math.PI
 
-                // Smoothly fade gain to avoid click pops on note trigger/release
-                val goalGain = if (freq > 0f) baseAmp else 0f
-
                 for (i in 0 until bufferChunkSize) {
-                    if (renderedGain < goalGain) {
-                        renderedGain = (renderedGain + 0.002f).coerceAtMost(goalGain)
-                    } else if (renderedGain > goalGain) {
-                        renderedGain = (renderedGain - 0.002f).coerceAtLeast(goalGain)
-                    }
+                    val t = n / fs
 
-                    if (renderedGain > 0f && freq > 0f) {
-                        val t = n / fs // Elapsed time in seconds
-
-                        // Monophonic Waveform Formulae:
-                        val sampleValue: Double = when (wave) {
-                            WaveformType.SINE -> {
-                                // Sine Wave Formula: y(t) = A * sin(2 * π * f * t)
-                                renderedGain * sin(twoPi * freq * t)
-                            }
-
-                            WaveformType.SQUARE -> {
-                                // Square Wave Formula (50% duty cycle):
-                                // phase = (t * f) mod 1.0
-                                // y(t) = if (phase < 0.5) A else -A
-                                val phase = (t * freq) % 1.0
-                                if (phase < 0.5) renderedGain.toDouble() else -renderedGain.toDouble()
-                            }
-
-                            WaveformType.SAWTOOTH -> {
-                                // Sawtooth Wave Formula:
-                                // phase = (t * f) mod 1.0
-                                // y(t) = A * (2.0 * phase - 1.0)
-                                val phase = (t * freq) % 1.0
-                                renderedGain * (2.0 * phase - 1.0)
-                            }
+                    val sampleValue: Double = when (wave) {
+                        WaveformType.SINE -> {
+                            A * sin(twoPi * f * t)
                         }
-
-                        floatBuffer[i] = sampleValue.toFloat()
-                    } else {
-                        floatBuffer[i] = 0f
+                        WaveformType.SQUARE -> {
+                            val phase = (t * f) % 1.0
+                            if (phase < d) A.toDouble() else -A.toDouble()
+                        }
+                        WaveformType.SAWTOOTH -> {
+                            val phase = (t * f) % 1.0
+                            A * (2.0 * phase - 1.0)
+                        }
                     }
 
+                    floatBuffer[i] = sampleValue.toFloat()
                     n++
                 }
 
-                if (renderedGain > 0f) {
-                    _waveform.value = floatBuffer.copyOf()
-                }
-
+                _waveform.value = floatBuffer.copyOf()
                 track.write(floatBuffer, 0, bufferChunkSize, AudioTrack.WRITE_BLOCKING)
             }
         }
     }
 
-    /**
-     * Triggered when a key on the keyboard is held down.
-     * Monophonic synth rule: replaces current note with this new single note.
-     */
-    fun playNote(note: PianoNote) {
-        synchronized(activeNotesStack) {
-            activeNotesStack.remove(note)
-            activeNotesStack.add(note)
-            updateActiveNote()
-        }
-    }
-
-    /**
-     * Triggered when a key on the keyboard is released.
-     */
-    fun stopNote(note: PianoNote) {
-        synchronized(activeNotesStack) {
-            activeNotesStack.remove(note)
-            updateActiveNote()
-        }
-    }
-
-    private fun updateActiveNote() {
-        val topNote = activeNotesStack.lastOrNull()
-        _activeNote.value = topNote
-        currentFrequency = topNote?.frequency ?: 0f
-        if (topNote == null) {
-            generatePreviewWaveform()
-        }
-    }
-
-    fun setWaveform(waveform: WaveformType) {
-        _selectedWaveform.value = waveform
-        currentWaveform = waveform
-        if (_activeNote.value == null) {
-            generatePreviewWaveform()
-        }
-    }
-
-    fun setAmplitude(amp: Float) {
-        _amplitude.value = amp
-        targetAmplitude = amp
-        if (_activeNote.value == null) {
-            generatePreviewWaveform()
-        }
-    }
-
-    private fun generatePreviewWaveform() {
-        val bufferSize = 1024
-        val previewBuffer = FloatArray(bufferSize)
-        val refFreq = 440f // A4 reference note for idle visualization
-        val amp = _amplitude.value
-        val twoPi = 2.0 * Math.PI
-        val wave = currentWaveform
-
-        for (i in 0 until bufferSize) {
-            val t = i / sampleRate.toDouble()
-            val sampleValue = when (wave) {
-                WaveformType.SINE -> {
-                    amp * sin(twoPi * refFreq * t)
-                }
-                WaveformType.SQUARE -> {
-                    val phase = (t * refFreq) % 1.0
-                    if (phase < 0.5) amp.toDouble() else -amp.toDouble()
-                }
-                WaveformType.SAWTOOTH -> {
-                    val phase = (t * refFreq) % 1.0
-                    amp * (2.0 * phase - 1.0)
-                }
-            }
-            previewBuffer[i] = sampleValue.toFloat()
-        }
-        _waveform.value = previewBuffer
-    }
-
-    override fun onCleared() {
-        isEngineRunning = false
+    fun stop() {
+        _isPlaying.value = false
         audioJob?.cancel()
         audioJob = null
 
@@ -289,5 +209,39 @@ class WavesViewModel : ViewModel() {
                 track.release()
             }
         }
+        generatePreviewWaveform()
+    }
+
+    private fun generatePreviewWaveform() {
+        val bufferSize = 1024
+        val previewBuffer = FloatArray(bufferSize)
+        val f = currentFrequency
+        val A = currentAmplitude
+        val d = currentDutyCycle
+        val twoPi = 2.0 * Math.PI
+        val wave = currentWaveform
+
+        for (i in 0 until bufferSize) {
+            val t = i / sampleRate.toDouble()
+            val sampleValue = when (wave) {
+                WaveformType.SINE -> {
+                    A * sin(twoPi * f * t)
+                }
+                WaveformType.SQUARE -> {
+                    val phase = (t * f) % 1.0
+                    if (phase < d) A.toDouble() else -A.toDouble()
+                }
+                WaveformType.SAWTOOTH -> {
+                    val phase = (t * f) % 1.0
+                    A * (2.0 * phase - 1.0)
+                }
+            }
+            previewBuffer[i] = sampleValue.toFloat()
+        }
+        _waveform.value = previewBuffer
+    }
+
+    override fun onCleared() {
+        stop()
     }
 }

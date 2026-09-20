@@ -3,6 +3,7 @@ package com.example.chiptune.ui.screens.smb
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -18,11 +20,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.chiptune.ui.components.OCTAVE_NOTES
+import com.example.chiptune.ui.components.PianoKeyboard
 import com.example.chiptune.ui.components.Visualiser
 
 @Composable
@@ -30,7 +35,8 @@ fun SmbScreen(
     modifier: Modifier = Modifier,
     viewModel: SmbViewModel = viewModel()
 ) {
-    val isPlaying by viewModel.isPlaying.collectAsState()
+    val isPlayingMelody by viewModel.isPlayingMelody.collectAsState()
+    val activeNote by viewModel.activeNote.collectAsState()
     val waveformData by viewModel.waveformData.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -46,6 +52,7 @@ fun SmbScreen(
             style = MaterialTheme.typography.titleLarge
         )
 
+        // Visualiser Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -54,12 +61,27 @@ fun SmbScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "Square Wave Output",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF00E676)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Square Wave Output",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00E676)
+                    )
+                    Text(
+                        text = when {
+                            isPlayingMelody -> "Playing SMB Melody"
+                            activeNote != null -> "Playing: ${activeNote?.name} (${activeNote?.frequency?.toInt()} Hz)"
+                            else -> "Idle"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isPlayingMelody || activeNote != null) Color(0xFF00E676) else MaterialTheme.colorScheme.outline
+                    )
+                }
 
                 Visualiser(
                     modifier = Modifier
@@ -73,17 +95,57 @@ fun SmbScreen(
             }
         }
 
+        // Play Melody Button
         Button(
-            onClick = { viewModel.play() },
-            enabled = !isPlaying,
+            onClick = { viewModel.togglePlayMelody() },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(50.dp),
+            colors = if (isPlayingMelody) {
+                ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            } else {
+                ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            }
         ) {
             Text(
-                text = if (isPlaying) "Playing..." else "Play",
+                text = if (isPlayingMelody) "Stop Melody" else "Play Melody",
                 style = MaterialTheme.typography.titleMedium
             )
+        }
+
+        // 1-Octave Piano Keyboard Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "1-Octave Keyboard (Monophonic)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Hold key down to play",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+
+                PianoKeyboard(
+                    notes = OCTAVE_NOTES,
+                    activeNote = activeNote,
+                    onNoteDown = { note -> viewModel.playNote(note) },
+                    onNoteUp = { note -> viewModel.stopNote(note) }
+                )
+            }
         }
     }
 }
