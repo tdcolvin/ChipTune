@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +26,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.chiptune.ui.navigation.AppRoute
+import com.example.chiptune.ui.screens.monkey.MonkeyScreen
 import com.example.chiptune.ui.screens.sine.SineScreen
 import com.example.chiptune.ui.screens.smb.SmbScreen
 import com.example.chiptune.ui.screens.tetris.TetrisScreen
@@ -81,6 +82,9 @@ fun MainApp() {
                 entry<AppRoute.Smb> {
                     SmbScreen(modifier = Modifier.padding(innerPadding))
                 }
+                entry<AppRoute.Monkey> {
+                    MonkeyScreen(modifier = Modifier.padding(innerPadding))
+                }
                 entry<AppRoute.Waves> {
                     WavesScreen(modifier = Modifier.padding(innerPadding))
                 }
@@ -110,11 +114,11 @@ fun TopNavBar(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val routes = listOf(AppRoute.Tetris, AppRoute.Sine, AppRoute.Smb, AppRoute.Waves)
+                val routes = listOf(AppRoute.Tetris, AppRoute.Sine, AppRoute.Smb, AppRoute.Monkey, AppRoute.Waves)
                 routes.forEach { route ->
                     val isSelected = currentRoute == route
                     if (isSelected) {
