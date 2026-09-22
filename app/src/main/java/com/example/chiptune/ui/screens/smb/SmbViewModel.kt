@@ -73,7 +73,32 @@ class SmbViewModel : ViewModel() {
         Note(NOTE_D5, 0.5f),
         Note(NOTE_B4, 1.0f, stacatto = true),
         Note(REST, 0.5f),
-    )
+
+        Note(NOTE_C5, 1f, stacatto = true),
+        Note(REST, 0.5f),
+        Note(NOTE_G4, 1f, stacatto = true),
+        Note(REST, 0.5f),
+        Note(NOTE_E4, 1f, stacatto = true),
+        Note(REST, 0.5f),
+
+        Note(NOTE_A4, 1f, stacatto = true),
+        Note(NOTE_B4, 1f, stacatto = true),
+        Note(NOTE_AS4, 0.5f),
+        Note(NOTE_A4, 1f, stacatto = true),
+
+        Note(NOTE_G4, 2.0f/3.0f, stacatto = true),
+        Note(NOTE_E5, 2.0f/3.0f, stacatto = true),
+        Note(NOTE_G5, 2.0f/3.0f, stacatto = true),
+        Note(NOTE_A5, 1f, stacatto = true),
+        Note(NOTE_F5, 0.5f),
+        Note(NOTE_G5, 0.5f),
+
+        Note(REST, 0.5f),
+        Note(NOTE_E5, 1.0f, stacatto = true),
+        Note(NOTE_C5, 0.5f),
+        Note(NOTE_D5, 0.5f),
+        Note(NOTE_B4, 1.0f, stacatto = true),
+        Note(REST, 0.5f),    )
 
     private val sampleRate = 44100
 

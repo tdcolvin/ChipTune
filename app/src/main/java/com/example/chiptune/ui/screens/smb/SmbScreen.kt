@@ -52,48 +52,15 @@ fun SmbScreen(
             style = MaterialTheme.typography.titleLarge
         )
 
-        // Visualiser Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Square Wave Output",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00E676)
-                    )
-                    Text(
-                        text = when {
-                            isPlayingMelody -> "Playing SMB Melody"
-                            activeNote != null -> "Playing: ${activeNote?.name} (${activeNote?.frequency?.toInt()} Hz)"
-                            else -> "Idle"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isPlayingMelody || activeNote != null) Color(0xFF00E676) else MaterialTheme.colorScheme.outline
-                    )
-                }
-
-                Visualiser(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(8.dp))
-                        .padding(4.dp),
-                    wavedata = waveformData.mixed,
-                    lineColor = Color(0xFF00E676)
-                )
-            }
-        }
+        Visualiser(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(8.dp))
+                .padding(4.dp),
+            wavedata = waveformData.mixed,
+            lineColor = Color(0xFF00E676)
+        )
 
         // Play Melody Button
         Button(
@@ -114,38 +81,11 @@ fun SmbScreen(
         }
 
         // 1-Octave Piano Keyboard Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "1-Octave Keyboard (Monophonic)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Hold key down to play",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-
-                PianoKeyboard(
-                    notes = OCTAVE_NOTES,
-                    activeNote = activeNote,
-                    onNoteDown = { note -> viewModel.playNote(note) },
-                    onNoteUp = { note -> viewModel.stopNote(note) }
-                )
-            }
-        }
+        PianoKeyboard(
+            notes = OCTAVE_NOTES,
+            activeNote = activeNote,
+            onNoteDown = { note -> viewModel.playNote(note) },
+            onNoteUp = { note -> viewModel.stopNote(note) }
+        )
     }
 }
