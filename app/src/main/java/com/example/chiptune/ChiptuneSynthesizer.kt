@@ -135,7 +135,12 @@ class ChiptuneSynthesizer {
             val floatBuffer = FloatArray(1024)
             val masterFloatBuffer = FloatArray(1024)
 
-            while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING) {
+            while (true) {
+                val track = audioTrack ?: break
+                if (track.state != AudioTrack.STATE_INITIALIZED || track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                    break
+                }
+
                 floatBuffer.fill(0f)
                 masterFloatBuffer.fill(0f)
 
@@ -175,7 +180,11 @@ class ChiptuneSynthesizer {
                 currentWaveform.tryEmit(mixedWave)
                 waveformData.tryEmit(WaveformData(mixed = mixedWave, channelWaveforms = channelWavesMap))
 
-                audioTrack?.write(masterFloatBuffer, 0, masterFloatBuffer.size, AudioTrack.WRITE_BLOCKING)
+                try {
+                    track.write(masterFloatBuffer, 0, masterFloatBuffer.size, AudioTrack.WRITE_BLOCKING)
+                } catch (_: Exception) {
+                    break
+                }
 
                 masterSampleIndex += floatBuffer.size
             }
@@ -191,25 +200,32 @@ class ChiptuneSynthesizer {
             AudioFormat.ENCODING_PCM_FLOAT
         )
 
-        audioTrack = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                    .setSampleRate(sampleRate)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build()
-            )
-            .setBufferSizeInBytes(bufferSize)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
+        try {
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
 
-        audioTrack?.play()
+            audioTrack = track
+            if (track.state == AudioTrack.STATE_INITIALIZED) {
+                track.play()
+            }
+        } catch (_: Exception) {
+            audioTrack = null
+        }
     }
 
     /**
@@ -246,7 +262,12 @@ class ChiptuneSynthesizer {
             val floatBuffer = FloatArray(1024)
             val masterFloatBuffer = FloatArray(1024)
 
-            while (audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING && masterSampleIndex < totalSamples) {
+            while (masterSampleIndex < totalSamples) {
+                val track = audioTrack ?: break
+                if (track.state != AudioTrack.STATE_INITIALIZED || track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                    break
+                }
+
                 floatBuffer.fill(0f)
                 masterFloatBuffer.fill(0f)
 
@@ -283,7 +304,11 @@ class ChiptuneSynthesizer {
                 currentWaveform.tryEmit(mixedWave)
                 waveformData.tryEmit(WaveformData(mixed = mixedWave, channelWaveforms = channelWavesMap))
 
-                audioTrack?.write(masterFloatBuffer, 0, masterFloatBuffer.size, AudioTrack.WRITE_BLOCKING)
+                try {
+                    track.write(masterFloatBuffer, 0, masterFloatBuffer.size, AudioTrack.WRITE_BLOCKING)
+                } catch (_: Exception) {
+                    break
+                }
 
                 masterSampleIndex += floatBuffer.size
             }
@@ -351,11 +376,24 @@ class ChiptuneSynthesizer {
     fun stop() {
         synthesisJob?.cancel()
         synthesisJob = null
-        audioTrack?.apply {
-            stop()
-            release()
-        }
+
+        val trackToRelease = audioTrack
         audioTrack = null
+
+        trackToRelease?.let { track ->
+            try {
+                if (track.state == AudioTrack.STATE_INITIALIZED && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    track.stop()
+                }
+            } catch (_: Exception) {
+            } finally {
+                try {
+                    track.release()
+                } catch (_: Exception) {
+                }
+            }
+        }
+
         masterSampleIndex = 0L
         channels.forEach { it.reset() }
     }

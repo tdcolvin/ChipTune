@@ -255,7 +255,11 @@ class MonkeyViewModel : ViewModel() {
                     _waveformData.value = WaveformData(mixed = waveCopy)
                 }
 
-                track.write(floatBuffer, 0, bufferChunkSize, AudioTrack.WRITE_BLOCKING)
+                try {
+                    track.write(floatBuffer, 0, bufferChunkSize, AudioTrack.WRITE_BLOCKING)
+                } catch (_: Exception) {
+                    break
+                }
             }
         }
     }
@@ -372,12 +376,15 @@ class MonkeyViewModel : ViewModel() {
         liveAudioTrack = null
         trackToRelease?.let { track ->
             try {
-                if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                if (track.state == AudioTrack.STATE_INITIALIZED && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                     track.stop()
                 }
             } catch (_: Exception) {
             } finally {
-                track.release()
+                try {
+                    track.release()
+                } catch (_: Exception) {
+                }
             }
         }
         synth.stop()
