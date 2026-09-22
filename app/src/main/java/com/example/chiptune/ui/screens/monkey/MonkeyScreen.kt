@@ -41,7 +41,6 @@ fun MonkeyScreen(
     val isPlayingMelody by viewModel.isPlayingMelody.collectAsState()
     val selectedSynthType by viewModel.selectedSynthType.collectAsState()
     val activeNote by viewModel.activeNote.collectAsState()
-    val isVoicesPlaying by viewModel.isVoicesPlaying.collectAsState()
     val waveformData by viewModel.waveformData.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -60,48 +59,15 @@ fun MonkeyScreen(
         )
 
         // Visualiser Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "$synthTitle Wave Output",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFFB74D)
-                    )
-                    Text(
-                        text = when {
-                            isPlayingMelody -> "Playing Monkey Island Theme"
-                            activeNote != null -> "Playing: ${activeNote?.name} (${activeNote?.frequency?.toInt()} Hz)"
-                            isVoicesPlaying -> "Playing Notes"
-                            else -> "Idle"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isPlayingMelody || (activeNote != null) || isVoicesPlaying) Color(0xFFFFB74D) else MaterialTheme.colorScheme.outline
-                    )
-                }
-
-                Visualiser(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(8.dp))
-                        .padding(4.dp),
-                    wavedata = waveformData.mixed,
-                    lineColor = Color(0xFFFFB74D)
-                )
-            }
-        }
+        Visualiser(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(8.dp))
+                .padding(4.dp),
+            wavedata = waveformData.mixed,
+            lineColor = Color(0xFFFFB74D)
+        )
 
         // Synthesis Mode Selection Card
         Card(
@@ -123,18 +89,18 @@ fun MonkeyScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
-                        selected = selectedSynthType == SynthType.Opl2,
-                        onClick = { viewModel.setSynthType(SynthType.Opl2) },
-                        label = { Text("OPL2 Synthesis") },
+                        selected = selectedSynthType == SynthType.Fm2op,
+                        onClick = { viewModel.setSynthType(SynthType.Fm2op) },
+                        label = { Text("2-Op FM Synthesis") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         )
                     )
                     FilterChip(
-                        selected = selectedSynthType == SynthType.Fm2op,
-                        onClick = { viewModel.setSynthType(SynthType.Fm2op) },
-                        label = { Text("2-Op FM Synthesis") },
+                        selected = selectedSynthType == SynthType.Opl2,
+                        onClick = { viewModel.setSynthType(SynthType.Opl2) },
+                        label = { Text("OPL2 Synthesis") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -162,39 +128,11 @@ fun MonkeyScreen(
             )
         }
 
-        // 1-Octave Piano Keyboard Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "1-Octave Keyboard ($synthTitle Synthesis)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Tap key to play note",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-
-                PianoKeyboard(
-                    notes = OCTAVE_NOTES,
-                    activeNote = activeNote,
-                    onNoteDown = { note -> viewModel.playNote(note) },
-                    onNoteUp = { note -> viewModel.stopNote(note) }
-                )
-            }
-        }
+        PianoKeyboard(
+            notes = OCTAVE_NOTES,
+            activeNote = activeNote,
+            onNoteDown = { note -> viewModel.playNote(note) },
+            onNoteUp = { note -> viewModel.stopNote(note) }
+        )
     }
 }

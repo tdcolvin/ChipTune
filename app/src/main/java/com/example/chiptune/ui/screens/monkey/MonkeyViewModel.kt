@@ -120,14 +120,11 @@ class MonkeyViewModel : ViewModel() {
     private val _isPlayingMelody = MutableStateFlow(false)
     val isPlayingMelody: StateFlow<Boolean> = _isPlayingMelody.asStateFlow()
 
-    private val _selectedSynthType = MutableStateFlow(SynthType.Opl2)
+    private val _selectedSynthType = MutableStateFlow(SynthType.Fm2op)
     val selectedSynthType: StateFlow<SynthType> = _selectedSynthType.asStateFlow()
 
     private val _activeNote = MutableStateFlow<PianoNote?>(null)
     val activeNote: StateFlow<PianoNote?> = _activeNote.asStateFlow()
-
-    private val _isVoicesPlaying = MutableStateFlow(false)
-    val isVoicesPlaying: StateFlow<Boolean> = _isVoicesPlaying.asStateFlow()
 
     private val _liveWaveform = MutableStateFlow(FloatArray(1024))
 
@@ -260,10 +257,6 @@ class MonkeyViewModel : ViewModel() {
                         playingVoices.removeAll(finishedVoices.toSet())
                     }
 
-                    if (playingVoices.isEmpty()) {
-                        _isVoicesPlaying.value = false
-                    }
-
                     for (i in 0 until bufferChunkSize) {
                         floatBuffer[i] = floatBuffer[i].coerceIn(-1.0f, 1.0f)
                     }
@@ -274,7 +267,6 @@ class MonkeyViewModel : ViewModel() {
                 } else if (!_isPlayingMelody.value) {
                     if (wasVoicesPlaying) {
                         wasVoicesPlaying = false
-                        _isVoicesPlaying.value = false
                         generatePreviewWaveform()
                     }
                 }
@@ -298,7 +290,6 @@ class MonkeyViewModel : ViewModel() {
             _activeNote.value = note
         }
         playingVoices.add(ActiveVoice(freq = note.frequency))
-        _isVoicesPlaying.value = true
     }
 
     fun stopNote(note: PianoNote) {
@@ -320,7 +311,6 @@ class MonkeyViewModel : ViewModel() {
         if (_isPlayingMelody.value) return
 
         playingVoices.clear()
-        _isVoicesPlaying.value = false
         synchronized(activeKeysHeld) {
             activeKeysHeld.clear()
             _activeNote.value = null
