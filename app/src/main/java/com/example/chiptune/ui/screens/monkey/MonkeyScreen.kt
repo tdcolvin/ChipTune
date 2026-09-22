@@ -36,11 +36,12 @@ import com.example.chiptune.ui.components.Visualiser
 @Composable
 fun MonkeyScreen(
     modifier: Modifier = Modifier,
-    viewModel: MonkeyViewModel = viewModel()
+    viewModel: MonkeyViewModel = viewModel(),
 ) {
     val isPlayingMelody by viewModel.isPlayingMelody.collectAsState()
     val selectedSynthType by viewModel.selectedSynthType.collectAsState()
     val activeNote by viewModel.activeNote.collectAsState()
+    val isVoicesPlaying by viewModel.isVoicesPlaying.collectAsState()
     val waveformData by viewModel.waveformData.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -82,10 +83,11 @@ fun MonkeyScreen(
                         text = when {
                             isPlayingMelody -> "Playing Monkey Island Theme"
                             activeNote != null -> "Playing: ${activeNote?.name} (${activeNote?.frequency?.toInt()} Hz)"
+                            isVoicesPlaying -> "Playing Notes"
                             else -> "Idle"
                         },
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (isPlayingMelody || activeNote != null) Color(0xFFFFB74D) else MaterialTheme.colorScheme.outline
+                        color = if (isPlayingMelody || (activeNote != null) || isVoicesPlaying) Color(0xFFFFB74D) else MaterialTheme.colorScheme.outline
                     )
                 }
 
@@ -180,7 +182,7 @@ fun MonkeyScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Hold key down to play",
+                        text = "Tap key to play note",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )

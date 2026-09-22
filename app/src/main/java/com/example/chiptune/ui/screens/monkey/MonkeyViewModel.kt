@@ -24,10 +24,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Collections
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.exp
 import kotlin.math.sin
 
 class MonkeyViewModel : ViewModel() {
+
+    private class ActiveVoice(
+        val freq: Float,
+        var sampleCounter: Long = 0L
+    )
 
     private val synth = ChiptuneSynthesizer()
 
@@ -119,15 +126,16 @@ class MonkeyViewModel : ViewModel() {
     private val _activeNote = MutableStateFlow<PianoNote?>(null)
     val activeNote: StateFlow<PianoNote?> = _activeNote.asStateFlow()
 
+    private val _isVoicesPlaying = MutableStateFlow(false)
+    val isVoicesPlaying: StateFlow<Boolean> = _isVoicesPlaying.asStateFlow()
+
     private val _liveWaveform = MutableStateFlow(FloatArray(1024))
 
     private val _waveformData = MutableStateFlow(WaveformData())
     val waveformData: StateFlow<WaveformData> = _waveformData.asStateFlow()
 
-    private val activeNotesStack = mutableListOf<PianoNote>()
-
-    @Volatile
-    private var currentFrequency = 0f
+    private val activeKeysHeld = Collections.synchronizedList(mutableListOf<PianoNote>())
+    private val playingVoices = ConcurrentLinkedQueue<ActiveVoice>()
 
     @Volatile
     private var isLiveEngineRunning = true
@@ -189,70 +197,86 @@ class MonkeyViewModel : ViewModel() {
         liveAudioJob = viewModelScope.launch(Dispatchers.Default) {
             val bufferChunkSize = track.bufferSizeInFrames.coerceAtLeast(512)
             val floatBuffer = FloatArray(bufferChunkSize)
-
-            var renderedGain = 0f
-            var noteSampleCounter = 0L
-            var lastFreq = 0f
+            val twoPi = 2.0 * Math.PI
+            var wasVoicesPlaying = false
 
             while (isLiveEngineRunning && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                val freq = currentFrequency
-                if (freq != lastFreq) {
-                    noteSampleCounter = 0L
-                    lastFreq = freq
-                }
+                floatBuffer.fill(0f)
 
-                val baseAmp = 0.5f
-                val goalGain = if (freq > 0f && !_isPlayingMelody.value) baseAmp else 0f
-                val twoPi = 2.0 * Math.PI
-                val currentSynth = _selectedSynthType.value
+                if (!_isPlayingMelody.value && playingVoices.isNotEmpty()) {
+                    wasVoicesPlaying = true
+                    val currentSynth = _selectedSynthType.value
+                    val finishedVoices = mutableListOf<ActiveVoice>()
 
-                for (i in 0 until bufferChunkSize) {
-                    if (renderedGain < goalGain) {
-                        renderedGain = (renderedGain + 0.002f).coerceAtMost(goalGain)
-                    } else if (renderedGain > goalGain) {
-                        renderedGain = (renderedGain - 0.002f).coerceAtLeast(goalGain)
-                    }
+                    for (voice in playingVoices) {
+                        val freq = voice.freq
+                        var sc = voice.sampleCounter
 
-                    if (renderedGain > 0f && freq > 0f) {
-                        val sampleValue = when (currentSynth) {
-                            SynthType.Opl2 -> {
-                                val incCarrier = twoPi * freq / sampleRate
-                                val incModulator = twoPi * (freq * 3.5) / sampleRate
+                        for (i in 0 until bufferChunkSize) {
+                            val sampleValue = when (currentSynth) {
+                                SynthType.Opl2 -> {
+                                    val incCarrier = twoPi * freq / sampleRate
+                                    val incModulator = twoPi * (freq * 3.5) / sampleRate
 
-                                val oplEnvelope = exp(-0.000080003 * noteSampleCounter)
-                                val modIndex = 2.5 * oplEnvelope
+                                    val oplEnvelope = exp(-0.000080003 * sc)
+                                    if (oplEnvelope < 0.0005) {
+                                        finishedVoices.add(voice)
+                                        break
+                                    }
+                                    val modIndex = 2.5 * oplEnvelope
 
-                                val phaseModulator = (incModulator * noteSampleCounter) % twoPi
-                                val phaseCarrier = (incCarrier * noteSampleCounter) % twoPi
+                                    val phaseModulator = (incModulator * sc) % twoPi
+                                    val phaseCarrier = (incCarrier * sc) % twoPi
 
-                                val modOut = if (phaseModulator < Math.PI) sin(phaseModulator) else 0.0
-                                val finalModOut = modOut * modIndex
+                                    val modOut = if (phaseModulator < Math.PI) sin(phaseModulator) else 0.0
+                                    val finalModOut = modOut * modIndex
 
-                                val carrierOut = sin(phaseCarrier + finalModOut) * oplEnvelope
-                                carrierOut * 0.7 * (renderedGain / baseAmp)
+                                    val carrierOut = sin(phaseCarrier + finalModOut) * oplEnvelope
+                                    carrierOut * 0.35
+                                }
+                                SynthType.Fm2op -> {
+                                    val oplEnvelope = exp(-0.000080003 * sc)
+                                    if (oplEnvelope < 0.0005) {
+                                        finishedVoices.add(voice)
+                                        break
+                                    }
+                                    val t = sc / sampleRate.toDouble()
+                                    val modulatorFreq = freq * 2.0
+                                    val modulationIndex = 2.2 * oplEnvelope
+                                    val modulator = sin(twoPi * modulatorFreq * t)
+                                    val carrierOut = sin(twoPi * freq * t + (modulator * modulationIndex)) * oplEnvelope
+                                    carrierOut * 0.35
+                                }
+                                else -> 0.0
                             }
-                            SynthType.Fm2op -> {
-                                val t = noteSampleCounter / sampleRate.toDouble()
-                                val modulatorFreq = freq * 2.0
-                                val modulationIndex = 2.2
-                                val modulator = sin(twoPi * modulatorFreq * t)
-                                val carrierOut = sin(twoPi * freq * t + (modulator * modulationIndex))
-                                carrierOut * 0.7 * (renderedGain / baseAmp)
-                            }
-                            else -> 0.0
+
+                            floatBuffer[i] += sampleValue.toFloat()
+                            sc++
                         }
-                        floatBuffer[i] = sampleValue.toFloat()
-                        noteSampleCounter++
-                    } else {
-                        floatBuffer[i] = 0f
-                        noteSampleCounter = 0L
+                        voice.sampleCounter = sc
                     }
-                }
 
-                if (renderedGain > 0f && !_isPlayingMelody.value) {
+                    if (finishedVoices.isNotEmpty()) {
+                        playingVoices.removeAll(finishedVoices.toSet())
+                    }
+
+                    if (playingVoices.isEmpty()) {
+                        _isVoicesPlaying.value = false
+                    }
+
+                    for (i in 0 until bufferChunkSize) {
+                        floatBuffer[i] = floatBuffer[i].coerceIn(-1.0f, 1.0f)
+                    }
+
                     val waveCopy = floatBuffer.copyOf()
                     _liveWaveform.value = waveCopy
                     _waveformData.value = WaveformData(mixed = waveCopy)
+                } else if (!_isPlayingMelody.value) {
+                    if (wasVoicesPlaying) {
+                        wasVoicesPlaying = false
+                        _isVoicesPlaying.value = false
+                        generatePreviewWaveform()
+                    }
                 }
 
                 try {
@@ -268,26 +292,19 @@ class MonkeyViewModel : ViewModel() {
         if (_isPlayingMelody.value) {
             stopMelody()
         }
-        synchronized(activeNotesStack) {
-            activeNotesStack.remove(note)
-            activeNotesStack.add(note)
-            updateActiveNote()
+        synchronized(activeKeysHeld) {
+            activeKeysHeld.remove(note)
+            activeKeysHeld.add(note)
+            _activeNote.value = note
         }
+        playingVoices.add(ActiveVoice(freq = note.frequency))
+        _isVoicesPlaying.value = true
     }
 
     fun stopNote(note: PianoNote) {
-        synchronized(activeNotesStack) {
-            activeNotesStack.remove(note)
-            updateActiveNote()
-        }
-    }
-
-    private fun updateActiveNote() {
-        val topNote = activeNotesStack.lastOrNull()
-        _activeNote.value = topNote
-        currentFrequency = topNote?.frequency ?: 0f
-        if (topNote == null && !_isPlayingMelody.value) {
-            generatePreviewWaveform()
+        synchronized(activeKeysHeld) {
+            activeKeysHeld.remove(note)
+            _activeNote.value = activeKeysHeld.lastOrNull()
         }
     }
 
@@ -302,10 +319,11 @@ class MonkeyViewModel : ViewModel() {
     fun playMelody() {
         if (_isPlayingMelody.value) return
 
-        synchronized(activeNotesStack) {
-            activeNotesStack.clear()
+        playingVoices.clear()
+        _isVoicesPlaying.value = false
+        synchronized(activeKeysHeld) {
+            activeKeysHeld.clear()
             _activeNote.value = null
-            currentFrequency = 0f
         }
 
         _isPlayingMelody.value = true
