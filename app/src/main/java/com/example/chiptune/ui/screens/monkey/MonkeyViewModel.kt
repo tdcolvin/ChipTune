@@ -338,39 +338,6 @@ class MonkeyViewModel : ViewModel() {
     private fun generatePreviewWaveform() {
         val bufferSize = 1024
         val previewBuffer = FloatArray(bufferSize)
-        val refFreq = 440f
-        val twoPi = 2.0 * Math.PI
-        val currentSynth = _selectedSynthType.value
-
-        for (i in 0 until bufferSize) {
-            val sampleValue = when (currentSynth) {
-                SynthType.Opl2 -> {
-                    val incCarrier = twoPi * refFreq / sampleRate
-                    val incModulator = twoPi * (refFreq * 3.5) / sampleRate
-                    val oplEnvelope = exp(-0.000080003 * i)
-                    val modIndex = 2.5 * oplEnvelope
-
-                    val phaseModulator = (incModulator * i) % twoPi
-                    val phaseCarrier = (incCarrier * i) % twoPi
-
-                    val modOut = if (phaseModulator < Math.PI) sin(phaseModulator) else 0.0
-                    val finalModOut = modOut * modIndex
-
-                    val carrierOut = sin(phaseCarrier + finalModOut) * oplEnvelope
-                    carrierOut * 0.7 * 0.5
-                }
-                SynthType.Fm2op -> {
-                    val t = i / sampleRate.toDouble()
-                    val modulatorFreq = refFreq * 2.0
-                    val modulationIndex = 2.2
-                    val modulator = sin(twoPi * modulatorFreq * t)
-                    val carrierOut = sin(twoPi * refFreq * t + (modulator * modulationIndex))
-                    carrierOut * 0.5
-                }
-                else -> 0.0
-            }
-            previewBuffer[i] = sampleValue.toFloat()
-        }
         _liveWaveform.value = previewBuffer
         _waveformData.value = WaveformData(mixed = previewBuffer)
     }
