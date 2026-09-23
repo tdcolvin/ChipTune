@@ -13,6 +13,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.sin
 
+data class ScaleNote(
+    val name: String,
+    val frequency: Float
+)
+
+val ONE_OCTAVE_SCALE = listOf(
+    ScaleNote("C4", 261.63f),
+    ScaleNote("D4", 293.66f),
+    ScaleNote("E4", 329.63f),
+    ScaleNote("F4", 349.23f),
+    ScaleNote("G4", 392.00f),
+    ScaleNote("A4", 440.00f),
+    ScaleNote("B4", 493.88f),
+    ScaleNote("C5", 523.25f)
+)
+
 enum class WaveformType(
     val displayName: String,
     val formulaTitle: String,
@@ -49,8 +65,8 @@ class WavesViewModel : ViewModel() {
     private val _selectedWaveform = MutableStateFlow(WaveformType.SINE)
     val selectedWaveform: StateFlow<WaveformType> = _selectedWaveform.asStateFlow()
 
-    private val _frequency = MutableStateFlow(440f) // Default 440 Hz
-    val frequency: StateFlow<Float> = _frequency.asStateFlow()
+    private val _currentNote = MutableStateFlow<ScaleNote?>(null)
+    val currentNote: StateFlow<ScaleNote?> = _currentNote.asStateFlow()
 
     private val _amplitude = MutableStateFlow(0.5f) // Default 50%
     val amplitude: StateFlow<Float> = _amplitude.asStateFlow()
@@ -68,9 +84,6 @@ class WavesViewModel : ViewModel() {
     private var currentWaveform = WaveformType.SINE
 
     @Volatile
-    private var currentFrequency = 440f
-
-    @Volatile
     private var currentAmplitude = 0.5f
 
     @Volatile
@@ -83,14 +96,6 @@ class WavesViewModel : ViewModel() {
     fun setWaveform(waveform: WaveformType) {
         _selectedWaveform.value = waveform
         currentWaveform = waveform
-        if (!_isPlaying.value) {
-            generatePreviewWaveform()
-        }
-    }
-
-    fun setFrequency(freq: Float) {
-        _frequency.value = freq
-        currentFrequency = freq
         if (!_isPlaying.value) {
             generatePreviewWaveform()
         }
@@ -155,29 +160,37 @@ class WavesViewModel : ViewModel() {
             val bufferChunkSize = track.bufferSizeInFrames.coerceAtLeast(512)
             val floatBuffer = FloatArray(bufferChunkSize)
 
-            var n = 0L // Absolute sample counter
+            val samplesPerNote = (sampleRate * 0.4).toLong() // 400ms per note
+            var n = 0L
+            var phase = 0.0
 
             while (_isPlaying.value && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                val currentNoteIdx = ((n / samplesPerNote) % ONE_OCTAVE_SCALE.size).toInt()
+                val activeNote = ONE_OCTAVE_SCALE[currentNoteIdx]
+                if (_currentNote.value != activeNote) {
+                    _currentNote.value = activeNote
+                }
+
                 val wave = currentWaveform
-                val f = currentFrequency
                 val A = currentAmplitude
                 val d = currentDutyCycle
                 val fs = sampleRate.toDouble()
-                val twoPi = 2.0 * Math.PI
 
                 for (i in 0 until bufferChunkSize) {
-                    val t = n / fs
+                    val noteIdx = ((n / samplesPerNote) % ONE_OCTAVE_SCALE.size).toInt()
+                    val note = ONE_OCTAVE_SCALE[noteIdx]
+
+                    val phaseInc = note.frequency.toDouble() / fs
+                    phase = (phase + phaseInc) % 1.0
 
                     val sampleValue: Double = when (wave) {
                         WaveformType.SINE -> {
-                            A * sin(twoPi * f * t)
+                            A * sin(2.0 * Math.PI * phase)
                         }
                         WaveformType.SQUARE -> {
-                            val phase = (t * f) % 1.0
                             if (phase < d) A.toDouble() else -A.toDouble()
                         }
                         WaveformType.SAWTOOTH -> {
-                            val phase = (t * f) % 1.0
                             A * (2.0 * phase - 1.0)
                         }
                     }
@@ -198,6 +211,7 @@ class WavesViewModel : ViewModel() {
 
     fun stop() {
         _isPlaying.value = false
+        _currentNote.value = null
         audioJob?.cancel()
         audioJob = null
 
@@ -222,7 +236,7 @@ class WavesViewModel : ViewModel() {
     private fun generatePreviewWaveform() {
         val bufferSize = 1024
         val previewBuffer = FloatArray(bufferSize)
-        val f = currentFrequency
+        val f = ONE_OCTAVE_SCALE[0].frequency // Use C4 for static preview
         val A = currentAmplitude
         val d = currentDutyCycle
         val twoPi = 2.0 * Math.PI

@@ -40,7 +40,7 @@ fun WavesScreen(
 ) {
     val isPlaying by viewModel.isPlaying.collectAsState()
     val selectedWaveform by viewModel.selectedWaveform.collectAsState()
-    val frequency by viewModel.frequency.collectAsState()
+    val currentNote by viewModel.currentNote.collectAsState()
     val amplitude by viewModel.amplitude.collectAsState()
     val dutyCycle by viewModel.dutyCycle.collectAsState()
     val waveform by viewModel.waveform.collectAsState()
@@ -80,7 +80,7 @@ fun WavesScreen(
                         color = Color(0xFF00E676)
                     )
                     Text(
-                        text = if (isPlaying) "Playing (${frequency.toInt()} Hz)" else "Stopped",
+                        text = if (isPlaying && currentNote != null) "Playing ${currentNote?.name} (${currentNote?.frequency?.toInt()} Hz)" else "Stopped",
                         style = MaterialTheme.typography.labelMedium,
                         color = if (isPlaying) Color(0xFF00E676) else MaterialTheme.colorScheme.outline
                     )
@@ -176,7 +176,7 @@ fun WavesScreen(
             }
         }
 
-        // Signal Parameters Card (Frequency & Amplitude Sliders + Duty Cycle for Square)
+        // Signal Parameters Card (Amplitude Slider + Duty Cycle for Square)
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -190,32 +190,6 @@ fun WavesScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-
-                // Frequency (Pitch) Slider
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Frequency (Pitch)",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = "${frequency.toInt()} Hz",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Slider(
-                        value = frequency,
-                        onValueChange = { viewModel.setFrequency(it) },
-                        valueRange = 100f..2000f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
 
                 // Amplitude Slider
                 Column(
@@ -273,7 +247,7 @@ fun WavesScreen(
             }
         }
 
-        // Start / Stop Button
+        // Play / Stop Button
         Button(
             onClick = { viewModel.togglePlay() },
             modifier = Modifier
@@ -286,7 +260,7 @@ fun WavesScreen(
             }
         ) {
             Text(
-                text = if (isPlaying) "Stop" else "Start",
+                text = if (isPlaying) "Stop" else "Play Scale",
                 style = MaterialTheme.typography.titleMedium
             )
         }
