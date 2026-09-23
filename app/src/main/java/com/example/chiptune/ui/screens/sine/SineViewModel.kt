@@ -98,7 +98,7 @@ class SineViewModel : ViewModel() {
         track.play()
 
         audioJob = viewModelScope.launch(Dispatchers.Default) {
-            val bufferChunkSize = track.bufferSizeInFrames
+            val bufferChunkSize = track.bufferSizeInFrames.coerceAtLeast(512)
             val floatBuffer = FloatArray(bufferChunkSize)
 
             // 'n' tracks the absolute sample index since playback started
@@ -107,10 +107,11 @@ class SineViewModel : ViewModel() {
             while (_isPlaying.value && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                 val f = currentFrequency
                 val A = currentAmplitude
-                val fs = sampleRate
+                val fs = sampleRate.toDouble()
 
                 for (i in 0 until bufferChunkSize) {
-                    val x_n = A * sin(2.0 * Math.PI * f * (n / fs))
+                    val t = n / fs
+                    val x_n = A * sin(2.0 * Math.PI * f * t)
                     floatBuffer[i] = x_n.toFloat()
                     n++
                 }
