@@ -1,6 +1,5 @@
 package com.example.chiptune
 
-import kotlin.math.exp
 import kotlin.math.sin
 
 class SequencedToneChannel(
@@ -82,38 +81,22 @@ class SequencedToneChannel(
                     }
                 }
 
-                val rawSignal = when (synthType) {
-                    SynthType.Sine -> sin(twoPi * freq * t)
-                    SynthType.Square -> {
-                        val phase = (t * freq) % 1.0
-                        if (phase < dutyCycle) 1.0 else -1.0
-                    }
-                    SynthType.Fm2op -> {
-                        val modulatorFreq = freq * 2.0
-                        val modulationIndex = 2.2
-                        val modulator = sin(twoPi * modulatorFreq * t)
-                        sin(twoPi * freq * t + (modulator * modulationIndex))
-                    }
-                    SynthType.Sawtooth -> {
-                        val period = 1.0 / freq
-                        val progress = (t % period) / period
-                        2.0 * progress - 1.0
-                    }
-                    SynthType.Opl2 -> {
-                        val incCarrier = twoPi * freq / sampleRate
-                        val incModulator = twoPi * (freq * 3.5) / sampleRate
-
-                        val oplEnvelope = exp(-0.000080003 * noteSampleCounter)
-                        val modIndex = 2.5 * oplEnvelope
-
-                        val phaseModulator = (incModulator * noteSampleCounter) % twoPi
-                        val phaseCarrier = (incCarrier * noteSampleCounter) % twoPi
-
-                        val modOut = if (phaseModulator < Math.PI) sin(phaseModulator) else 0.0
-                        val finalModOut = modOut * modIndex
-
-                        val carrierOut = sin(phaseCarrier + finalModOut) * oplEnvelope
-                        carrierOut * 0.7
+                val patch = synthType.patch
+                val rawSignal = if (patch != null) {
+                    patch.renderSample(freq.toDouble(), noteSampleCounter, sampleRate, masterGain = 0.7)
+                } else {
+                    when (synthType) {
+                        SynthType.Sine -> sin(twoPi * freq * t)
+                        SynthType.Square -> {
+                            val phase = (t * freq) % 1.0
+                            if (phase < dutyCycle) 1.0 else -1.0
+                        }
+                        SynthType.Sawtooth -> {
+                            val period = 1.0 / freq
+                            val progress = (t % period) / period
+                            2.0 * progress - 1.0
+                        }
+                        else -> 0.0
                     }
                 }
 

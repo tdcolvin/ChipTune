@@ -1,9 +1,10 @@
 package com.example.chiptune.ui.screens.monkey
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,7 +23,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +44,15 @@ fun MonkeyScreen(
     val waveformData by viewModel.waveformData.collectAsState()
     val scrollState = rememberScrollState()
 
-    val synthTitle = if (selectedSynthType == SynthType.Opl2) "OPL2" else "2-Op FM"
+    val instruments = listOf(
+        SynthType.Opl2 to "Marimba (OPL2)",
+        SynthType.FmBass to "FM Slap Bass",
+        SynthType.SynthBrass to "Synth Brass",
+        SynthType.SoftFlute to "Soft Flute",
+        SynthType.Fm2op to "2-Op FM"
+    )
+
+    val currentInstrumentLabel = instruments.firstOrNull { it.first == selectedSynthType }?.second ?: "Instrument"
 
     Column(
         modifier = modifier
@@ -79,33 +87,28 @@ fun MonkeyScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Synthesis Mode",
+                    text = "Instrument Selection",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilterChip(
-                        selected = selectedSynthType == SynthType.Fm2op,
-                        onClick = { viewModel.setSynthType(SynthType.Fm2op) },
-                        label = { Text("2-Op FM Synthesis") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                    instruments.forEach { (type, label) ->
+                        FilterChip(
+                            selected = selectedSynthType == type,
+                            onClick = { viewModel.setSynthType(type) },
+                            label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
                         )
-                    )
-                    FilterChip(
-                        selected = selectedSynthType == SynthType.Opl2,
-                        onClick = { viewModel.setSynthType(SynthType.Opl2) },
-                        label = { Text("OPL2 Synthesis") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
+                    }
                 }
             }
         }
@@ -123,7 +126,7 @@ fun MonkeyScreen(
             }
         ) {
             Text(
-                text = if (isPlayingMelody) "Stop Melody" else "Play Melody ($synthTitle)",
+                text = if (isPlayingMelody) "Stop Melody" else "Play Melody ($currentInstrumentLabel)",
                 style = MaterialTheme.typography.titleMedium
             )
         }

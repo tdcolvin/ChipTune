@@ -8,6 +8,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.sin
 
 data class Note(
     val freq: Float,
@@ -79,8 +82,102 @@ enum class SynthType {
     Square,
     Fm2op,
     Sawtooth,
-    Opl2
+    Opl2,
+    FmBass,
+    SynthBrass,
+    SoftFlute
 }
+
+enum class WaveType {
+    FullSine,
+    HalfSine,
+    AbsSine,
+    PulseSine
+}
+
+data class Opl2Patch(
+    val modMult: Double = 1.0,
+    val carrierMult: Double = 1.0,
+    val baseModIndex: Double = 2.0,
+    val modDecayRate: Double = 0.0,
+    val carrierDecayRate: Double = 0.00003,
+    val waveType: WaveType = WaveType.FullSine,
+    val gain: Double = 0.7
+) {
+    fun getCarrierEnvelope(sampleCounter: Long): Double {
+        return if (carrierDecayRate > 0.0) exp(-carrierDecayRate * sampleCounter) else 1.0
+    }
+
+    fun renderSample(
+        freq: Double,
+        sampleCounter: Long,
+        sampleRate: Int,
+        masterGain: Double = gain
+    ): Double {
+        val twoPi = 2.0 * Math.PI
+        val incCarrier = twoPi * (freq * carrierMult) / sampleRate
+        val incModulator = twoPi * (freq * modMult) / sampleRate
+
+        val modEnv = if (modDecayRate > 0.0) exp(-modDecayRate * sampleCounter) else 1.0
+        val carrierEnv = getCarrierEnvelope(sampleCounter)
+
+        val modIndex = baseModIndex * modEnv
+
+        val phaseModulator = (incModulator * sampleCounter) % twoPi
+        val phaseCarrier = (incCarrier * sampleCounter) % twoPi
+
+        val modOut = when (waveType) {
+            WaveType.FullSine -> sin(phaseModulator)
+            WaveType.HalfSine -> if (phaseModulator < Math.PI) sin(phaseModulator) else 0.0
+            WaveType.AbsSine -> abs(sin(phaseModulator))
+            WaveType.PulseSine -> if (phaseModulator < Math.PI / 2.0 || (phaseModulator >= Math.PI && phaseModulator < 1.5 * Math.PI)) sin(phaseModulator) else 0.0
+        }
+
+        val finalModOut = modOut * modIndex
+        val carrierOut = sin(phaseCarrier + finalModOut) * carrierEnv
+        return carrierOut * masterGain
+    }
+}
+
+val SynthType.patch: Opl2Patch?
+    get() = when (this) {
+        SynthType.Opl2 -> Opl2Patch(
+            modMult = 3.5,
+            baseModIndex = 2.5,
+            modDecayRate = 0.000080003,
+            carrierDecayRate = 0.000080003,
+            waveType = WaveType.HalfSine
+        )
+        SynthType.FmBass -> Opl2Patch(
+            modMult = 1.0,
+            baseModIndex = 4.5,
+            modDecayRate = 0.0004,
+            carrierDecayRate = 0.00003,
+            waveType = WaveType.HalfSine
+        )
+        SynthType.SynthBrass -> Opl2Patch(
+            modMult = 2.0,
+            baseModIndex = 2.2,
+            modDecayRate = 0.0,
+            carrierDecayRate = 0.00005,
+            waveType = WaveType.FullSine
+        )
+        SynthType.SoftFlute -> Opl2Patch(
+            modMult = 2.0,
+            baseModIndex = 0.35,
+            modDecayRate = 0.0,
+            carrierDecayRate = 0.000015,
+            waveType = WaveType.FullSine
+        )
+        SynthType.Fm2op -> Opl2Patch(
+            modMult = 2.0,
+            baseModIndex = 2.2,
+            modDecayRate = 0.000080003,
+            carrierDecayRate = 0.000080003,
+            waveType = WaveType.FullSine
+        )
+        SynthType.Sine, SynthType.Square, SynthType.Sawtooth -> null
+    }
 
 data class WaveformData(
     val mixed: FloatArray = FloatArray(0),

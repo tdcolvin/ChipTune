@@ -17,6 +17,7 @@ import com.example.chiptune.Note
 import com.example.chiptune.REST
 import com.example.chiptune.SynthType
 import com.example.chiptune.WaveformData
+import com.example.chiptune.patch
 import com.example.chiptune.ui.components.PianoNote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -120,7 +121,7 @@ class MonkeyViewModel : ViewModel() {
     private val _isPlayingMelody = MutableStateFlow(false)
     val isPlayingMelody: StateFlow<Boolean> = _isPlayingMelody.asStateFlow()
 
-    private val _selectedSynthType = MutableStateFlow(SynthType.Fm2op)
+    private val _selectedSynthType = MutableStateFlow(SynthType.Opl2)
     val selectedSynthType: StateFlow<SynthType> = _selectedSynthType.asStateFlow()
 
     private val _activeNote = MutableStateFlow<PianoNote?>(null)
@@ -205,46 +206,41 @@ class MonkeyViewModel : ViewModel() {
                     val currentSynth = _selectedSynthType.value
                     val finishedVoices = mutableListOf<ActiveVoice>()
 
+                    val patch = currentSynth.patch
+
                     for (voice in playingVoices) {
                         val freq = voice.freq
                         var sc = voice.sampleCounter
 
                         for (i in 0 until bufferChunkSize) {
-                            val sampleValue = when (currentSynth) {
-                                SynthType.Opl2 -> {
-                                    val incCarrier = twoPi * freq / sampleRate
-                                    val incModulator = twoPi * (freq * 3.5) / sampleRate
-
-                                    val oplEnvelope = exp(-0.000080003 * sc)
-                                    if (oplEnvelope < 0.0005) {
-                                        finishedVoices.add(voice)
-                                        break
-                                    }
-                                    val modIndex = 2.5 * oplEnvelope
-
-                                    val phaseModulator = (incModulator * sc) % twoPi
-                                    val phaseCarrier = (incCarrier * sc) % twoPi
-
-                                    val modOut = if (phaseModulator < Math.PI) sin(phaseModulator) else 0.0
-                                    val finalModOut = modOut * modIndex
-
-                                    val carrierOut = sin(phaseCarrier + finalModOut) * oplEnvelope
-                                    carrierOut * 0.35
+                            val sampleValue = if (patch != null) {
+                                val env = patch.getCarrierEnvelope(sc)
+                                if (env < 0.0005) {
+                                    finishedVoices.add(voice)
+                                    break
                                 }
-                                SynthType.Fm2op -> {
-                                    val oplEnvelope = exp(-0.000080003 * sc)
-                                    if (oplEnvelope < 0.0005) {
-                                        finishedVoices.add(voice)
-                                        break
-                                    }
-                                    val t = sc / sampleRate.toDouble()
-                                    val modulatorFreq = freq * 2.0
-                                    val modulationIndex = 2.2 * oplEnvelope
-                                    val modulator = sin(twoPi * modulatorFreq * t)
-                                    val carrierOut = sin(twoPi * freq * t + (modulator * modulationIndex)) * oplEnvelope
-                                    carrierOut * 0.35
+                                patch.renderSample(freq.toDouble(), sc, sampleRate, masterGain = 0.35)
+                            } else {
+                                val env = exp(-0.00003 * sc)
+                                if (env < 0.0005) {
+                                    finishedVoices.add(voice)
+                                    break
                                 }
-                                else -> 0.0
+                                val t = sc / sampleRate.toDouble()
+                                val raw = when (currentSynth) {
+                                    SynthType.Sine -> sin(twoPi * freq * t)
+                                    SynthType.Square -> {
+                                        val phase = (t * freq) % 1.0
+                                        if (phase < 0.5) 1.0 else -1.0
+                                    }
+                                    SynthType.Sawtooth -> {
+                                        val period = 1.0 / freq
+                                        val progress = (t % period) / period
+                                        2.0 * progress - 1.0
+                                    }
+                                    else -> 0.0
+                                }
+                                raw * env * 0.35
                             }
 
                             floatBuffer[i] += sampleValue.toFloat()
