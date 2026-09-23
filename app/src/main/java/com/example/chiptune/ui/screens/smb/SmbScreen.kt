@@ -48,7 +48,7 @@ fun SmbScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "Super Mario Bros Theme",
+            text = "Playing a melody",
             style = MaterialTheme.typography.titleLarge
         )
 

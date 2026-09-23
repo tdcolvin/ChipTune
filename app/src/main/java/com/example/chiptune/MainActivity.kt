@@ -123,11 +123,11 @@ fun TopNavBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 val routes = listOf(
-                    AppRoute.Tetris,
                     AppRoute.Sine,
-                    AppRoute.Smb,
                     AppRoute.Waves,
+                    AppRoute.Smb,
                     AppRoute.Explosion,
+                    AppRoute.Tetris,
                     AppRoute.Monkey
                 )
                 routes.forEach { route ->

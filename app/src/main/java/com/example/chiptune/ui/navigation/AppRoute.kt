@@ -9,7 +9,7 @@ sealed interface AppRoute : NavKey {
 
     @Serializable
     data object Tetris : AppRoute {
-        override val title: String = "Tetris"
+        override val title: String = "Polyphonics"
     }
 
     @Serializable
@@ -19,7 +19,7 @@ sealed interface AppRoute : NavKey {
 
     @Serializable
     data object Smb : AppRoute {
-        override val title: String = "SMB"
+        override val title: String = "Melody"
     }
 
     @Serializable
@@ -34,6 +34,6 @@ sealed interface AppRoute : NavKey {
 
     @Serializable
     data object Explosion : AppRoute {
-        override val title: String = "Explosion"
+        override val title: String = "Percussion"
     }
 }

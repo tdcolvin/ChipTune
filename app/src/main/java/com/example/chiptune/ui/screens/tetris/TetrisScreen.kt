@@ -57,7 +57,7 @@ fun TetrisScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Tetris Chiptune Synth", style = MaterialTheme.typography.titleLarge)
+        Text("Multi-channel synth", style = MaterialTheme.typography.titleLarge)
 
         // Synth Type Preset buttons
         FlowRow(
