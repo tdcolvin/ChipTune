@@ -181,18 +181,49 @@ class TetrisViewModel : ViewModel() {
 
     val channelList = mutableStateListOf<AudioChannel>()
 
-    fun startSynth(synthType: SynthType) {
-        synth.start(synthType, leadSequence = tetris, bassSequence = tetrisBass)
+    var isPlaying = false
+
+    fun startPercussion() {
+        if (!isPlaying) {
+            startSynthSilent()
+        }
+        setChannelMute("Percussion", false)
+    }
+
+    fun startBass() {
+        if (!isPlaying) {
+            startSynthSilent()
+        }
+        setChannelMute("Bass", false)
+    }
+
+    fun startMelody() {
+        if (!isPlaying) {
+            startSynthSilent()
+        }
+        setChannelMute("Lead", false)
+    }
+
+    private fun startSynthSilent() {
+        synth.start(SynthType.Square, leadSequence = tetris, bassSequence = tetrisBass)
+        isPlaying = true
+        synth.channels.forEach { it.isMuted = true }
         updateChannelList()
     }
 
     fun stopSynth() {
         synth.stop()
+        isPlaying = false
         updateChannelList()
     }
 
     fun toggleMute(channel: AudioChannel) {
         channel.isMuted = !channel.isMuted
+        updateChannelList()
+    }
+
+    private fun setChannelMute(name: String, muted: Boolean) {
+        synth.channels.find { it.name == name }?.isMuted = muted
         updateChannelList()
     }
 

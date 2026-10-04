@@ -29,7 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.chiptune.SynthType
 import com.example.chiptune.ui.components.Visualiser
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -59,16 +58,14 @@ fun TetrisScreen(
     ) {
         Text("Multi-channel synth", style = MaterialTheme.typography.titleLarge)
 
-        // Synth Type Preset buttons
+        // Track Start Buttons
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Button(onClick = { viewModel.startSynth(SynthType.Sine) }) { Text("Sine") }
-            Button(onClick = { viewModel.startSynth(SynthType.Square) }) { Text("Square") }
-            Button(onClick = { viewModel.startSynth(SynthType.Sawtooth) }) { Text("Saw") }
-            Button(onClick = { viewModel.startSynth(SynthType.Fm2op) }) { Text("FM") }
-            Button(onClick = { viewModel.startSynth(SynthType.Opl2) }) { Text("OPL2") }
+            Button(onClick = { viewModel.startPercussion() }) { Text("Percussion") }
+            Button(onClick = { viewModel.startBass() }) { Text("Bass") }
+            Button(onClick = { viewModel.startMelody() }) { Text("Melody") }
             Button(
                 onClick = { viewModel.stopSynth() },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
