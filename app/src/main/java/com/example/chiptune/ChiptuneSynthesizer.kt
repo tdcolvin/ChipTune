@@ -508,14 +508,6 @@ class ChiptuneSynthesizer {
     }
 
     /**
-     * Seeks relative by delta seconds (e.g. +10.0 or -10.0).
-     */
-    fun seekBySeconds(deltaSeconds: Double) {
-        val newIndex = masterSampleIndex + (deltaSeconds * sampleRate).toLong()
-        masterSampleIndex = newIndex.coerceAtLeast(0L)
-    }
-
-    /**
      * Returns current playback position in seconds.
      */
     fun getCurrentPositionSeconds(): Double {
