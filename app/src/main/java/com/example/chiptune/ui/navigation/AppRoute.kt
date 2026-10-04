@@ -36,4 +36,9 @@ sealed interface AppRoute : NavKey {
     data object Explosion : AppRoute {
         override val title: String = "Percussion"
     }
+
+    @Serializable
+    data object Service : AppRoute {
+        override val title: String = "Service"
+    }
 }
