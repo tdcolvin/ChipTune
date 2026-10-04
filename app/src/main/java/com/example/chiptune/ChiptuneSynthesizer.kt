@@ -6,6 +6,7 @@ import android.media.AudioTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -227,6 +228,30 @@ class ChiptuneSynthesizer {
         DrumType.Kick, DrumType.Kick, DrumType.Snare, DrumType.HiHat
     )
 
+    var isPaused: Boolean = false
+        private set
+
+    val isPlaying: Boolean
+        get() = synthesisJob?.isActive == true && !isPaused
+
+    fun pause() {
+        isPaused = true
+        try {
+            audioTrack?.pause()
+        } catch (_: Exception) {}
+    }
+
+    fun resume() {
+        if (!isPaused) return
+        isPaused = false
+        try {
+            audioTrack?.play()
+        } catch (_: Exception) {}
+        if (synthesisJob?.isActive != true) {
+            generateAudio()
+        }
+    }
+
     private fun generateAudio() {
         synthesisJob = scope.launch {
             val floatBuffer = FloatArray(1024)
@@ -234,8 +259,19 @@ class ChiptuneSynthesizer {
 
             while (true) {
                 val track = audioTrack ?: break
-                if (track.state != AudioTrack.STATE_INITIALIZED || track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                if (track.state != AudioTrack.STATE_INITIALIZED) {
                     break
+                }
+                if (isPaused) {
+                    delay(50)
+                    continue
+                }
+                if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                    try {
+                        track.play()
+                    } catch (_: Exception) {
+                        break
+                    }
                 }
 
                 floatBuffer.fill(0f)
@@ -424,6 +460,7 @@ class ChiptuneSynthesizer {
         bassSequence: List<Note> = emptyList()
     ) {
         stop()
+        isPaused = false
         masterSampleIndex = 0L
         channels.clear()
         if (leadSequence.isNotEmpty()) {
@@ -460,17 +497,33 @@ class ChiptuneSynthesizer {
      * Seeks playback to a specific timeline sample position.
      */
     fun seekToSample(sampleIndex: Long) {
-        masterSampleIndex = sampleIndex
+        masterSampleIndex = sampleIndex.coerceAtLeast(0L)
     }
 
     /**
      * Seeks playback to a specific timeline offset in seconds.
      */
     fun seekSeconds(seconds: Double) {
-        masterSampleIndex = (seconds * sampleRate).toLong()
+        masterSampleIndex = (seconds * sampleRate).toLong().coerceAtLeast(0L)
+    }
+
+    /**
+     * Seeks relative by delta seconds (e.g. +10.0 or -10.0).
+     */
+    fun seekBySeconds(deltaSeconds: Double) {
+        val newIndex = masterSampleIndex + (deltaSeconds * sampleRate).toLong()
+        masterSampleIndex = newIndex.coerceAtLeast(0L)
+    }
+
+    /**
+     * Returns current playback position in seconds.
+     */
+    fun getCurrentPositionSeconds(): Double {
+        return masterSampleIndex.toDouble() / sampleRate
     }
 
     fun stop() {
+        isPaused = false
         synthesisJob?.cancel()
         synthesisJob = null
 
