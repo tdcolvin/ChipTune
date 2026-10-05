@@ -71,7 +71,6 @@ class SampleViewModel(application: Application) : AndroidViewModel(application) 
         loadPianoSamples()
         updateNotesList()
         startAudioEngine()
-        generatePreviewWaveform()
     }
 
     private fun loadPianoSamples() {
@@ -217,8 +216,8 @@ class SampleViewModel(application: Application) : AndroidViewModel(application) 
 
                     val waveCopy = floatBuffer.copyOf()
                     _waveform.value = waveCopy
-                } else if (!_isPlayingDemo.value) {
-                    generatePreviewWaveform()
+                } else {
+                    _waveform.value = floatBuffer.copyOf()
                 }
 
                 try {
@@ -295,18 +294,7 @@ class SampleViewModel(application: Application) : AndroidViewModel(application) 
         playingVoices.forEach { it.isReleased = true }
     }
 
-    private fun generatePreviewWaveform() {
-        val bufferSize = 1024
-        val preview = FloatArray(bufferSize)
-        if (pianoSamples.isNotEmpty()) {
-            val step = (pianoSamples.size / bufferSize).coerceAtLeast(1)
-            for (i in 0 until bufferSize) {
-                val idx = (i * step).coerceAtMost(pianoSamples.size - 1)
-                preview[i] = (pianoSamples[idx] * 0.5f).coerceIn(-1.0f, 1.0f)
-            }
-        }
-        _waveform.value = preview
-    }
+
 
     override fun onCleared() {
         isEngineRunning = false
