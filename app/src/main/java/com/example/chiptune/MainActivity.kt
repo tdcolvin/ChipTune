@@ -28,6 +28,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.example.chiptune.ui.navigation.AppRoute
 import com.example.chiptune.ui.screens.explosion.ExplosionScreen
 import com.example.chiptune.ui.screens.monkey.MonkeyScreen
+import com.example.chiptune.ui.screens.sample.SampleScreen
 import com.example.chiptune.ui.screens.service.ServiceScreen
 import com.example.chiptune.ui.screens.sine.SineScreen
 import com.example.chiptune.ui.screens.smb.SmbScreen
@@ -93,6 +94,9 @@ fun MainApp() {
                 entry<AppRoute.Explosion> {
                     ExplosionScreen(modifier = Modifier.padding(innerPadding))
                 }
+                entry<AppRoute.Sample> {
+                    SampleScreen(modifier = Modifier.padding(innerPadding))
+                }
                 entry<AppRoute.Service> {
                     ServiceScreen(modifier = Modifier.padding(innerPadding))
                 }
@@ -133,6 +137,7 @@ fun TopNavBar(
                     AppRoute.Explosion,
                     AppRoute.Tetris,
                     AppRoute.Monkey,
+                    AppRoute.Sample,
                     AppRoute.Service
                 )
                 routes.forEach { route ->
