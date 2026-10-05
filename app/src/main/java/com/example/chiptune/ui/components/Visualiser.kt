@@ -15,7 +15,7 @@ fun Visualiser(
     wavedata: FloatArray,
     lineColor: Color = Color.Green
 ) {
-    val samples = 100
+    val samples = 300
     val firstNegative = wavedata.indexOfFirst { it < 0f }
     val positiveCrossing = if (firstNegative < 0) -1 else wavedata.drop(firstNegative).indexOfFirst { it >= 0f }
     val zeroCrossing = if (positiveCrossing < 0) -1 else positiveCrossing + firstNegative
