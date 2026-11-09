@@ -83,6 +83,9 @@ class ExplosionViewModel : ViewModel() {
     private val _isPlayingPercussion = MutableStateFlow(value = false)
     val isPlayingPercussion: StateFlow<Boolean> = _isPlayingPercussion.asStateFlow()
 
+    private val _isContinuousNoise = MutableStateFlow(value = false)
+    val isContinuousNoise: StateFlow<Boolean> = _isContinuousNoise.asStateFlow()
+
     private val _percussionSound = MutableStateFlow(PercussionSound.HIHAT_PATTERN)
     val percussionSound: StateFlow<PercussionSound> = _percussionSound.asStateFlow()
 
@@ -233,8 +236,22 @@ class ExplosionViewModel : ViewModel() {
 
     fun togglePercussionPlay() {
         val playing = !_isPlayingPercussion.value
+        if (playing) setContinuousNoise(false)
         _isPlayingPercussion.value = playing
         percussionChannel.isPlaying = playing
+    }
+
+    fun toggleContinuousNoise() {
+        setContinuousNoise(!_isContinuousNoise.value)
+    }
+
+    private fun setContinuousNoise(enabled: Boolean) {
+        _isContinuousNoise.value = enabled
+        percussionChannel.continuousNoise = enabled
+        if (enabled) {
+            _isPlayingPercussion.value = false
+            percussionChannel.isPlaying = false
+        }
     }
 
     fun setPercussionSound(sound: PercussionSound) {
