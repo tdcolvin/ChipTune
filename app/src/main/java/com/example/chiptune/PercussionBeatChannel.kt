@@ -18,6 +18,10 @@ class PercussionBeatChannel(
     var bpm: Double = 120.0
     var isPlaying: Boolean = false
 
+    /** When true, the channel outputs flat, unfiltered white noise with no envelope. It replaces the beat. */
+    @Volatile
+    var continuousNoise: Boolean = false
+
     val pattern16Step = intArrayOf(
         3, 0, 1, 0,  1, 0, 1, 0,
         1, 0, 1, 0,  1, 0, 1, 2
@@ -37,7 +41,21 @@ class PercussionBeatChannel(
     }
 
     override fun renderBlock(outBuffer: FloatArray, startSampleIndex: Long, numSamples: Int, sampleRate: Int) {
-        if (isMuted || !isPlaying) return
+        if (isMuted) return
+
+        if (continuousNoise) {
+            for (i in 0 until numSamples) {
+
+                // Same 15-bit LFSR noise as the drums, like the original chips.
+                val bit = ((lfsr shr 0) xor (lfsr shr 1)) and 1
+                lfsr = (lfsr shr 1) or (bit shl 14)
+                val noise = if ((lfsr and 1) != 0) 1.0f else -1.0f
+                outBuffer[i] += noise * 0.4f
+            }
+            return
+        }
+
+        if (!isPlaying) return
 
         val samplesPerBeat = sampleRate * (60.0 / bpm)
         val samplesPerStep = (samplesPerBeat / 4.0).toLong().coerceAtLeast(1L)

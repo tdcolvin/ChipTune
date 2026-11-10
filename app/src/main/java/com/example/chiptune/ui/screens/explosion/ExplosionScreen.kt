@@ -55,6 +55,7 @@ fun ExplosionScreen(
     val loopExplosion by viewModel.loopExplosion.collectAsState()
 
     val isPlayingPercussion by viewModel.isPlayingPercussion.collectAsState()
+    val isContinuousNoise by viewModel.isContinuousNoise.collectAsState()
     val percussionSound by viewModel.percussionSound.collectAsState()
     val percussionBpm by viewModel.percussionBpm.collectAsState()
     val currentPercussionStep by viewModel.currentPercussionStep.collectAsState()
@@ -167,6 +168,8 @@ fun ExplosionScreen(
                         )
                         if (isPercussionMuted) {
                             Text("MUTED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                        } else if (isContinuousNoise) {
+                            Text("WHITE NOISE (continuous)", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00BCD4))
                         } else if (isPlayingPercussion) {
                             Text("PLAYING (${percussionBpm.toInt()} BPM)", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00BCD4))
                         } else {
@@ -439,6 +442,24 @@ fun ExplosionScreen(
                 ) {
                     Text(
                         text = if (isPlayingPercussion) "⏹ STOP PERCUSSION BEAT" else "▶ PLAY PERCUSSION BEAT",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+
+                // Play / Stop Continuous White Noise
+                Button(
+                    onClick = { viewModel.toggleContinuousNoise() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = if (isContinuousNoise) {
+                        ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    } else {
+                        ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    }
+                ) {
+                    Text(
+                        text = if (isContinuousNoise) "⏹ STOP WHITE NOISE" else "〰 PLAY FLAT WHITE NOISE",
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
